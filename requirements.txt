@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-dotenv
+httpx
+
+livekit
+livekit-agents
+livekit-plugins-openai
+livekit-plugins-silero
+
+openai
+pymongo
