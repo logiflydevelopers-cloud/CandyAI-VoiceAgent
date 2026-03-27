@@ -12,6 +12,9 @@ class TokenRequest(BaseModel):
     user_id: str
     character_id: str
 
+@app.get("/")
+def health():
+    return {"status": "ok"}
 
 @app.post("/get-token")
 def get_token(data: TokenRequest):
