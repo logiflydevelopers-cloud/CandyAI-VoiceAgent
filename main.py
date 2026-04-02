@@ -129,8 +129,6 @@ async def my_agent(ctx: agents.JobContext):
 
     print("🧪 Waiting for user to speak...")
 
-    audio_stream = room_io.AudioStream(ctx.room)
-
     print("🎧 Listening to user audio...")
 
     # -------------------------
@@ -192,7 +190,6 @@ async def my_agent(ctx: agents.JobContext):
             user_id=user_id,
             character_data=character_data,
         ),
-        audio_in=audio_stream,
     )
 
     # -------------------------
