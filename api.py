@@ -19,7 +19,7 @@ def health():
 
 
 @app.post("/get-token")
-def get_token(data: TokenRequest):
+async def get_token(data: TokenRequest):
 
     print("Incoming:", data.dict())
 
@@ -48,7 +48,7 @@ def get_token(data: TokenRequest):
     )
 
     # -------------------------
-    # 🚀 DISPATCH AGENT (FIX)
+    # 🚀 DISPATCH AGENT (FIXED)
     # -------------------------
     try:
         lkapi = api.LiveKitAPI(
@@ -57,9 +57,9 @@ def get_token(data: TokenRequest):
             os.getenv("LIVEKIT_API_SECRET"),
         )
 
-        lkapi.agent_dispatch.create_dispatch(
+        await lkapi.agent_dispatch.create_dispatch( 
             api.CreateAgentDispatchRequest(
-                agent_name="voice-agent",  # must match your agent decorator
+                agent_name="voice-agent",
                 room=room,
             )
         )
@@ -69,9 +69,6 @@ def get_token(data: TokenRequest):
     except Exception as e:
         print("❌ Agent dispatch failed:", str(e))
 
-    # -------------------------
-    # 📤 RESPONSE
-    # -------------------------
     return {
         "token": token,
         "url": os.getenv("LIVEKIT_URL"),
