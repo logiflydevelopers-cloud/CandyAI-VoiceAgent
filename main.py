@@ -105,7 +105,7 @@ async def my_agent(ctx: agents.JobContext):
     # -------------------------
     # 🔗 CONNECT (FIXED)
     # -------------------------
-    await ctx.connect(auto_subscribe=True)
+    await ctx.connect()
     print("🔗 Room connected")
 
     # -------------------------
@@ -128,6 +128,10 @@ async def my_agent(ctx: agents.JobContext):
     print("👤 User ID:", user_id)
 
     print("🧪 Waiting for user to speak...")
+
+    audio_stream = room_io.AudioStream(ctx.room)
+
+    print("🎧 Listening to user audio...")
 
     # -------------------------
     # 📦 METADATA
@@ -188,6 +192,7 @@ async def my_agent(ctx: agents.JobContext):
             user_id=user_id,
             character_data=character_data,
         ),
+        audio_in=audio_stream,
     )
 
     # -------------------------
