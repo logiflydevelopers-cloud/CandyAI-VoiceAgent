@@ -9,24 +9,24 @@ from livekit.agents import (
 )
 from livekit.plugins import openai, silero
 from services.prompt_builder import build_character_prompt
-
 from services.memory import SimpleMemory
+from services.character_service import get_character_by_id
+
 import logging
 import json
-from services.character_service import get_character_by_id
+import os
 
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 memory_store = SimpleMemory()
 
 load_dotenv()
-import os
 
 print("LIVEKIT_URL:", os.getenv("LIVEKIT_URL"))
 print("LIVEKIT_API_KEY:", os.getenv("LIVEKIT_API_KEY"))
 
 # --------------------------------------------------
-# SIMPLE VOICE AGENT
+# 🎤 VOICE AGENT
 # --------------------------------------------------
 
 class VoiceAgent(Agent):
@@ -45,20 +45,17 @@ class VoiceAgent(Agent):
     async def on_user_turn_completed(self, turn_ctx, new_message):
 
         user_text = new_message.text_content
+        print("🗣️ User said:", user_text)
 
-        # -------------------------
-        # 🧠 ADD USER MESSAGE
-        # -------------------------
+        # Store memory
         self.memory_store.add_message(self.user_id, "user", user_text)
 
-        # -------------------------
-        # 🎭 SIMPLE MOOD DETECTION (fast version)
-        # -------------------------
         text = user_text.lower()
 
+        # Mood detection
         if any(x in text for x in ["sad", "upset", "bad day", "depressed"]):
             mood = "sad"
-        elif any(x in text for x in ["love", "baby", "miss you", "😘", "😉"]):
+        elif any(x in text for x in ["love", "baby", "miss you"]):
             mood = "flirty"
         elif any(x in text for x in ["angry", "mad", "frustrated"]):
             mood = "angry"
@@ -69,45 +66,36 @@ class VoiceAgent(Agent):
 
         self.memory_store.set_mood(self.user_id, mood)
 
-        # -------------------------
-        # 🧠 NAME DETECTION
-        # -------------------------
+        # Name detection
         if "my name is" in text:
             name = user_text.split("my name is")[-1].strip().split(" ")[0]
             self.memory_store.set_name(self.user_id, name)
 
-        # -------------------------
-        # GET UPDATED CONTEXT
-        # -------------------------
         ctx = self.memory_store.get_context(self.user_id)
 
-        # -------------------------
-        # DYNAMIC PROMPT INJECTION
-        # -------------------------
         dynamic_prompt = f"""
-            User name: {ctx["name"]}
-            Mood: {ctx["mood"]}
+User name: {ctx["name"]}
+Mood: {ctx["mood"]}
 
-            Recent conversation:
-            {ctx["history"]}
+Recent conversation:
+{ctx["history"]}
 
-            Tone rules:
-            - sad → caring
-            - happy → energetic
-            - flirty → playful
-            - angry → calm
-            """
+Tone rules:
+- sad → caring
+- happy → energetic
+- flirty → playful
+- angry → calm
+"""
 
-        turn_ctx.add_message(
-            role="system",
-            content=dynamic_prompt
-        )
+        turn_ctx.add_message(role="system", content=dynamic_prompt)
+
 
 # --------------------------------------------------
-# SERVER
+# 🚀 SERVER
 # --------------------------------------------------
 
 server = AgentServer()
+
 
 @server.rtc_session(agent_name="voice-agent")
 async def my_agent(ctx: agents.JobContext):
@@ -115,13 +103,20 @@ async def my_agent(ctx: agents.JobContext):
     print("✅ Agent job received")
 
     # -------------------------
-    # 🔗 STEP 1: CONNECT
+    # 🔗 CONNECT (FIXED)
     # -------------------------
-    await ctx.connect()
+    await ctx.connect(auto_subscribe=True)
     print("🔗 Room connected")
 
     # -------------------------
-    # 👤 STEP 2: WAIT FOR USER
+    # 🎧 DEBUG: TRACK LISTENER
+    # -------------------------
+    @ctx.room.on("track_subscribed")
+    def on_track(track, pub, participant):
+        print("🎤 Received track from:", participant.identity, "| kind:", track.kind)
+
+    # -------------------------
+    # 👤 WAIT FOR USER
     # -------------------------
     participant = await ctx.wait_for_participant()
 
@@ -132,8 +127,10 @@ async def my_agent(ctx: agents.JobContext):
     user_id = participant.identity
     print("👤 User ID:", user_id)
 
+    print("🧪 Waiting for user to speak...")
+
     # -------------------------
-    # 📦 STEP 3: READ METADATA
+    # 📦 METADATA
     # -------------------------
     metadata = {}
 
@@ -147,10 +144,9 @@ async def my_agent(ctx: agents.JobContext):
     print("🎭 Character ID:", character_id)
 
     # -------------------------
-    # 🎭 STEP 4: LOAD CHARACTER
+    # 🎭 LOAD CHARACTER
     # -------------------------
     character_data = get_character_by_id(character_id)
-
     print("✅ Character loaded:", character_data.get("name"))
 
     # -------------------------
@@ -183,7 +179,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     # -------------------------
-    # 🚀 START AGENT
+    # 🚀 START SESSION (FIXED)
     # -------------------------
     await session.start(
         room=ctx.room,
@@ -192,11 +188,13 @@ async def my_agent(ctx: agents.JobContext):
             user_id=user_id,
             character_data=character_data,
         ),
-        room_options=room_io.RoomOptions(),
+        room_options=room_io.RoomOptions(
+            audio_enabled=True, 
+        ),
     )
 
     # -------------------------
-    # 💬 INITIAL MESSAGE
+    # 💬 INITIAL GREETING
     # -------------------------
     await session.generate_reply(
         instructions="Start with a sweet, natural girlfriend-style greeting."
@@ -204,7 +202,7 @@ async def my_agent(ctx: agents.JobContext):
 
 
 # --------------------------------------------------
-# ENTRYPOINT
+# ▶ ENTRYPOINT
 # --------------------------------------------------
 
 if __name__ == "__main__":

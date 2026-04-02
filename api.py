@@ -26,7 +26,7 @@ async def get_token(data: TokenRequest):
     room = f"room_{data.character_id}"
 
     # -------------------------
-    # 🎫 GENERATE TOKEN
+    # GENERATE TOKEN
     # -------------------------
     token = (
         api.AccessToken(
@@ -48,7 +48,7 @@ async def get_token(data: TokenRequest):
     )
 
     # -------------------------
-    # 🚀 DISPATCH AGENT (FIXED)
+    # DISPATCH AGENT (FIXED)
     # -------------------------
     try:
         lkapi = api.LiveKitAPI(
@@ -64,10 +64,10 @@ async def get_token(data: TokenRequest):
             )
         )
 
-        print("✅ Agent dispatched to room:", room)
+        print("Agent dispatched to room:", room)
 
     except Exception as e:
-        print("❌ Agent dispatch failed:", str(e))
+        print("Agent dispatch failed:", str(e))
 
     return {
         "token": token,
