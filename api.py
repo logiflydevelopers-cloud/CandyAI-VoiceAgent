@@ -4,6 +4,7 @@ import os
 import json
 
 from livekit import api
+from fastapi import Request
 
 app = FastAPI()
 
@@ -19,7 +20,11 @@ def health():
 @app.post("/get-token")
 def get_token(data: TokenRequest):
 
-    token = (
+    print("Incoming:", data.dict())
+
+    room = f"room_{data.character_id}"
+
+    token = ( 
         api.AccessToken(
             os.getenv("LIVEKIT_API_KEY"),
             os.getenv("LIVEKIT_API_SECRET"),
@@ -32,7 +37,7 @@ def get_token(data: TokenRequest):
         .with_grants(
             api.VideoGrants(
                 room_join=True,
-                room="voice-room",
+                room=room,
             )
         )
         .to_jwt()
@@ -41,5 +46,5 @@ def get_token(data: TokenRequest):
     return {
         "token": token,
         "url": os.getenv("LIVEKIT_URL"),
-        "room": "voice-room"
+        "room": room
     }
