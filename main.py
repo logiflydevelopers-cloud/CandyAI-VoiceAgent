@@ -26,7 +26,7 @@ print("LIVEKIT_URL:", os.getenv("LIVEKIT_URL"))
 print("LIVEKIT_API_KEY:", os.getenv("LIVEKIT_API_KEY"))
 
 # --------------------------------------------------
-# 🎤 VOICE AGENT
+# VOICE AGENT
 # --------------------------------------------------
 
 class VoiceAgent(Agent):
@@ -91,7 +91,7 @@ Tone rules:
 
 
 # --------------------------------------------------
-# 🚀 SERVER
+# SERVER
 # --------------------------------------------------
 
 server = AgentServer()
@@ -100,39 +100,39 @@ server = AgentServer()
 @server.rtc_session(agent_name="voice-agent")
 async def my_agent(ctx: agents.JobContext):
 
-    print("✅ Agent job received")
+    print("Agent job received")
 
     # -------------------------
-    # 🔗 CONNECT (FIXED)
+    # CONNECT (FIXED)
     # -------------------------
     await ctx.connect()
-    print("🔗 Room connected")
+    print("Room connected")
 
     # -------------------------
-    # 🎧 DEBUG: TRACK LISTENER
+    # DEBUG: TRACK LISTENER
     # -------------------------
     @ctx.room.on("track_subscribed")
     def on_track(track, pub, participant):
-        print("🎤 Received track from:", participant.identity, "| kind:", track.kind)
+        print("Received track from:", participant.identity, "| kind:", track.kind)
 
     # -------------------------
-    # 👤 WAIT FOR USER
+    # WAIT FOR USER
     # -------------------------
     participant = await ctx.wait_for_participant()
 
     if not participant:
-        print("❌ No participant joined")
+        print("No participant joined")
         return
 
     user_id = participant.identity
-    print("👤 User ID:", user_id)
+    print("User ID:", user_id)
 
-    print("🧪 Waiting for user to speak...")
+    print("Waiting for user to speak...")
 
-    print("🎧 Listening to user audio...")
+    print("Listening to user audio...")
 
     # -------------------------
-    # 📦 METADATA
+    # METADATA
     # -------------------------
     metadata = {}
 
@@ -140,24 +140,24 @@ async def my_agent(ctx: agents.JobContext):
         try:
             metadata = json.loads(participant.metadata)
         except Exception as e:
-            print("⚠️ Metadata parse failed:", e)
+            print("Metadata parse failed:", e)
 
     character_id = metadata.get("character_id", "gf_1")
-    print("🎭 Character ID:", character_id)
+    print("Character ID:", character_id)
 
     # -------------------------
-    # 🎭 LOAD CHARACTER
+    # LOAD CHARACTER
     # -------------------------
     character_data = get_character_by_id(character_id)
-    print("✅ Character loaded:", character_data.get("name"))
+    print("Character loaded:", character_data.get("name"))
 
     # -------------------------
-    # 🧠 CHAT CONTEXT
+    # CHAT CONTEXT
     # -------------------------
     initial_ctx = ChatContext()
 
     # -------------------------
-    # 🎤 STT SETUP
+    # STT SETUP
     # -------------------------
     base_stt = openai.STT(model="gpt-4o-transcribe")
 
@@ -166,13 +166,10 @@ async def my_agent(ctx: agents.JobContext):
         min_silence_duration=0.3,
     )
 
-    streaming_stt = agents.stt.StreamAdapter(
-        stt=base_stt,
-        vad=None,
-    )
+    streaming_stt = base_stt
 
     # -------------------------
-    # 🤖 SESSION SETUP
+    # SESSION SETUP
     # -------------------------
     session = AgentSession(
         stt=streaming_stt,
@@ -181,7 +178,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     # -------------------------
-    # 🚀 START SESSION (FIXED)
+    # START SESSION (FIXED)
     # -------------------------
     await session.start(
         room=ctx.room,
@@ -193,7 +190,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     # -------------------------
-    # 💬 INITIAL GREETING
+    # INITIAL GREETING
     # -------------------------
     await session.generate_reply(
         instructions="Start with a sweet, natural girlfriend-style greeting."
@@ -201,7 +198,7 @@ async def my_agent(ctx: agents.JobContext):
 
 
 # --------------------------------------------------
-# ▶ ENTRYPOINT
+# ENTRYPOINT
 # --------------------------------------------------
 
 if __name__ == "__main__":
