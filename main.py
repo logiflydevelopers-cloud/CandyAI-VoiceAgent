@@ -162,21 +162,21 @@ async def my_agent(ctx: agents.JobContext):
     # -------------------------
     base_stt = openai.STT(model="gpt-4o-transcribe")
 
-    # vad_model = silero.VAD.load(
-    #     min_speech_duration=0.03,
-    #     min_silence_duration=0.15,
-    # )
+    vad_model = silero.VAD.load(
+        min_speech_duration=0.03,
+        min_silence_duration=0.15,
+    )
 
-    # streaming_stt = agents.stt.StreamAdapter(
-    #     stt=base_stt,
-    #     vad=vad_model,
-    # )
+    streaming_stt = agents.stt.StreamAdapter(
+        stt=base_stt,
+        vad=vad_model,
+    )
 
     # -------------------------
     # SESSION SETUP
     # -------------------------
     session = AgentSession(
-        stt=base_stt,
+        stt=streaming_stt,
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(voice="nova"),
     )
