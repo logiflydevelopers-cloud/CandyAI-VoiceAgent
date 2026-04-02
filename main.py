@@ -188,9 +188,6 @@ async def my_agent(ctx: agents.JobContext):
             user_id=user_id,
             character_data=character_data,
         ),
-        room_options=room_io.RoomOptions(
-            audio_enabled=True, 
-        ),
     )
 
     # -------------------------
