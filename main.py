@@ -45,7 +45,8 @@ class VoiceAgent(Agent):
     async def on_user_turn_completed(self, turn_ctx, new_message):
 
         user_text = new_message.text_content
-        print("🗣️ User said:", user_text)
+        print("=============================================STT TRIGGERED=====================================")
+        print("//////////////////////User said:", user_text)
 
         # Store memory
         self.memory_store.add_message(self.user_id, "user", user_text)
@@ -125,11 +126,11 @@ async def my_agent(ctx: agents.JobContext):
         return
 
     user_id = participant.identity
-    print("User ID:", user_id)
+    print("///////////////////////////////////////User ID:", user_id)
 
-    print("Waiting for user to speak...")
+    print("===============================================Waiting for user to speak...==========================================")
 
-    print("Listening to user audio...")
+    print("================================================Listening to user audio...===========================================")
 
     # -------------------------
     # METADATA
@@ -162,11 +163,15 @@ async def my_agent(ctx: agents.JobContext):
     base_stt = openai.STT(model="gpt-4o-transcribe")
 
     vad_model = silero.VAD.load(
+        threshold=0.2,
         min_speech_duration=0.05,
         min_silence_duration=0.3,
     )
 
-    streaming_stt = base_stt
+    streaming_stt = agents.stt.StreamAdapter(
+        stt=base_stt,
+        vad=vad_model,
+    )
 
     # -------------------------
     # SESSION SETUP
