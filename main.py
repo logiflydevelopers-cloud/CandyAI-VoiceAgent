@@ -96,7 +96,7 @@ Tone rules:
 # SERVER
 # --------------------------------------------------
 
-server = AgentServer(max_concurrent_jobs=5)
+server = AgentServer()
 
 
 @server.rtc_session(agent_name="voice-agent")
