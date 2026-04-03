@@ -179,7 +179,7 @@ async def my_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=streaming_stt,
         llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(voice="nova", streaming=True),
+        tts=openai.TTS(voice="nova"),
         vad=vad_model,
         allow_interruptions=False
     )
