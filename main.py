@@ -46,7 +46,7 @@ class VoiceAgent(Agent):
 
         user_text = new_message.text_content
         print("=============================================STT TRIGGERED=====================================")
-        print("//////////////////////User said:", user_text)
+        print("//////////////////////User said:", user_text, "//////////////////////////////////////////////////")
 
         # Store memory
         self.memory_store.add_message(self.user_id, "user", user_text)
@@ -88,7 +88,8 @@ Tone rules:
 - angry → calm
 """
 
-        turn_ctx.add_message(role="system", content=dynamic_prompt)
+        if len(ctx["history"]) > 1:
+            turn_ctx.add_message(role="system", content=dynamic_prompt)
 
 
 # --------------------------------------------------
@@ -160,7 +161,7 @@ async def my_agent(ctx: agents.JobContext):
     # -------------------------
     # STT SETUP
     # -------------------------
-    base_stt = openai.STT(model="gpt-4o-transcribe")
+    base_stt = openai.STT(model="gpt-4o-mini-transcribe")
 
     vad_model = silero.VAD.load(
         min_speech_duration=0.1,
@@ -179,7 +180,6 @@ async def my_agent(ctx: agents.JobContext):
         stt=streaming_stt,
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(voice="nova"),
-        vad=vad_model,
         allow_interruptions=False
     )
 
