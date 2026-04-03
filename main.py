@@ -39,8 +39,7 @@ class VoiceAgent(Agent):
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=build_character_prompt(character_data),
-            llm=openai.LLM(model="gpt-4o-mini"),
-            preemptive_generation=False
+            llm=openai.LLM(model="gpt-4o-mini")
         )
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
