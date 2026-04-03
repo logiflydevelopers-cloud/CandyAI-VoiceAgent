@@ -42,8 +42,7 @@ class VoiceAgent(Agent):
             chat_ctx=chat_ctx,
             instructions=build_character_prompt(character_data),
             llm=openai.LLM(
-                model="gpt-4o-mini",
-                max_tokens=120   # ✅ reduce chunking
+                model="gpt-4o-mini"
             )
         )
 
@@ -168,8 +167,7 @@ async def my_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=streaming_stt,
         llm=openai.LLM(
-            model="gpt-4o-mini",
-            max_tokens=120
+            model="gpt-4o-mini"
         ),
         tts=openai.TTS(
             voice="nova",
