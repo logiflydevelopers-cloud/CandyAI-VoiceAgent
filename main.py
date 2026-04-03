@@ -198,8 +198,7 @@ async def my_agent(ctx: agents.JobContext):
         agent.is_speaking = True
 
         await session.generate_reply(
-            instructions=instructions,
-            max_tokens=60   # keep small
+            instructions=instructions
         )
 
         agent.is_speaking = False
