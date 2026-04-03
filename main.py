@@ -40,10 +40,7 @@ class VoiceAgent(Agent):
 
         super().__init__(
             chat_ctx=chat_ctx,
-            instructions=build_character_prompt(character_data),
-            llm=openai.LLM(
-                model="gpt-4o-mini"
-            )
+            instructions=build_character_prompt(character_data)
         )
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
@@ -152,8 +149,8 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     vad_model = silero.VAD.load(
-        min_speech_duration=0.3,   # ✅ less noise triggers
-        min_silence_duration=0.8,  # ✅ smoother transitions
+        min_speech_duration=0.25,   # ✅ less noise triggers
+        min_silence_duration=0.7,  # ✅ smoother transitions
     )
 
     streaming_stt = agents.stt.StreamAdapter(
@@ -171,9 +168,10 @@ async def my_agent(ctx: agents.JobContext):
         ),
         tts=openai.TTS(
             voice="nova",
-            speed=1.0
+            speed=1.15
         ),
-        allow_interruptions=True   # ✅ CRITICAL FIX
+        allow_interruptions=True ,  # ✅ CRITICAL FIX
+        preemptive_generation=False
     )
 
     agent = VoiceAgent(
@@ -194,9 +192,16 @@ async def my_agent(ctx: agents.JobContext):
     # WRAP REPLY FOR SYNC
     # -------------------------
     async def safe_reply(instructions):
+        if agent.is_speaking:
+            return   # extra safety
+
         agent.is_speaking = True
-        await asyncio.sleep(0.2)   # ✅ buffer stabilization
-        await session.generate_reply(instructions=instructions)
+
+        await session.generate_reply(
+            instructions=instructions,
+            max_tokens=60   # keep small
+        )
+
         agent.is_speaking = False
 
     # -------------------------
