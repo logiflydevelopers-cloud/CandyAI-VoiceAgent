@@ -35,7 +35,6 @@ def get_all_characters(limit=20):
 
     return [serialize_character(doc) for doc in docs]
 
-
 # -----------------------------------
 # GET SINGLE CHARACTER
 # -----------------------------------

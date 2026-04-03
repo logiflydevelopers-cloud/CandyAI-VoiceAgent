@@ -15,6 +15,7 @@ from services.character_service import get_character_by_id
 import logging
 import json
 import os
+import asyncio
 
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 
@@ -35,18 +36,25 @@ class VoiceAgent(Agent):
         self.user_id = user_id
         self.character_data = character_data
         self.memory_store = memory_store
+        self.is_speaking = False   # ✅ NEW (sync fix)
 
         super().__init__(
             chat_ctx=chat_ctx,
             instructions=build_character_prompt(character_data),
-            llm=openai.LLM(model="gpt-4o-mini")
+            llm=openai.LLM(
+                model="gpt-4o-mini",
+                max_tokens=120   # ✅ reduce chunking
+            )
         )
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
 
+        # 🚫 BLOCK if agent is speaking
+        if self.is_speaking:
+            return
+
         user_text = new_message.text_content
-        print("=============================================STT TRIGGERED=====================================")
-        print("//////////////////////User said:", user_text, "//////////////////////////////////////////////////")
+        logging.info(f"User said: {user_text}")
 
         # Store memory
         self.memory_store.add_message(self.user_id, "user", user_text)
@@ -88,7 +96,8 @@ Tone rules:
 - angry → calm
 """
 
-        if len(ctx["history"]) > 1:
+        # ✅ Inject less frequently (performance + stability)
+        if len(ctx["history"]) % 3 == 0:
             turn_ctx.add_message(role="system", content=dynamic_prompt)
 
 
@@ -104,22 +113,13 @@ async def my_agent(ctx: agents.JobContext):
 
     print("Agent job received")
 
-    # -------------------------
-    # CONNECT (FIXED)
-    # -------------------------
     await ctx.connect()
     print("Room connected")
 
-    # -------------------------
-    # DEBUG: TRACK LISTENER
-    # -------------------------
     @ctx.room.on("track_subscribed")
     def on_track(track, pub, participant):
         print("Received track from:", participant.identity, "| kind:", track.kind)
 
-    # -------------------------
-    # WAIT FOR USER
-    # -------------------------
     participant = await ctx.wait_for_participant()
 
     if not participant:
@@ -127,15 +127,8 @@ async def my_agent(ctx: agents.JobContext):
         return
 
     user_id = participant.identity
-    print("///////////////////////////////////////User ID:", user_id)
+    print("User ID:", user_id)
 
-    print("===============================================Waiting for user to speak...==========================================")
-
-    print("================================================Listening to user audio...===========================================")
-
-    # -------------------------
-    # METADATA
-    # -------------------------
     metadata = {}
 
     if participant.metadata:
@@ -147,25 +140,21 @@ async def my_agent(ctx: agents.JobContext):
     character_id = metadata.get("character_id", "gf_1")
     print("Character ID:", character_id)
 
-    # -------------------------
-    # LOAD CHARACTER
-    # -------------------------
     character_data = get_character_by_id(character_id)
     print("Character loaded:", character_data.get("name"))
 
-    # -------------------------
-    # CHAT CONTEXT
-    # -------------------------
     initial_ctx = ChatContext()
 
     # -------------------------
-    # STT SETUP
+    # STT SETUP (OPTIMIZED)
     # -------------------------
-    base_stt = openai.STT(model="gpt-4o-mini-transcribe")
+    base_stt = openai.STT(
+        model="gpt-4o-mini-transcribe"
+    )
 
     vad_model = silero.VAD.load(
-        min_speech_duration=0.1,
-        min_silence_duration=0.3,
+        min_speech_duration=0.3,   # ✅ less noise triggers
+        min_silence_duration=0.8,  # ✅ smoother transitions
     )
 
     streaming_stt = agents.stt.StreamAdapter(
@@ -174,35 +163,49 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     # -------------------------
-    # SESSION SETUP
+    # SESSION SETUP (FIXED)
     # -------------------------
     session = AgentSession(
         stt=streaming_stt,
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(voice="nova"),
-        allow_interruptions=False
+        llm=openai.LLM(
+            model="gpt-4o-mini",
+            max_tokens=120
+        ),
+        tts=openai.TTS(
+            voice="nova",
+            speed=1.0
+        ),
+        allow_interruptions=True   # ✅ CRITICAL FIX
     )
 
-    # -------------------------
-    # START SESSION (FIXED)
-    # -------------------------
+    agent = VoiceAgent(
+        chat_ctx=initial_ctx,
+        user_id=user_id,
+        character_data=character_data,
+    )
+
     await session.start(
         room=ctx.room,
-        agent=VoiceAgent(
-            chat_ctx=initial_ctx,
-            user_id=user_id,
-            character_data=character_data,
-        ),
+        agent=agent,
         room_input_options=room_io.RoomInputOptions(
             close_on_disconnect=False
         )
     )
 
     # -------------------------
+    # WRAP REPLY FOR SYNC
+    # -------------------------
+    async def safe_reply(instructions):
+        agent.is_speaking = True
+        await asyncio.sleep(0.2)   # ✅ buffer stabilization
+        await session.generate_reply(instructions=instructions)
+        agent.is_speaking = False
+
+    # -------------------------
     # INITIAL GREETING
     # -------------------------
-    await session.generate_reply(
-        instructions="Start with a sweet, natural girlfriend-style greeting."
+    await safe_reply(
+        "Start with a sweet, natural girlfriend-style greeting."
     )
 
 
