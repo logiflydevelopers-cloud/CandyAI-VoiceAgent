@@ -40,6 +40,7 @@ class VoiceAgent(Agent):
             chat_ctx=chat_ctx,
             instructions=build_character_prompt(character_data),
             llm=openai.LLM(model="gpt-4o-mini"),
+            preemptive_generation=False
         )
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
@@ -95,7 +96,7 @@ Tone rules:
 # SERVER
 # --------------------------------------------------
 
-server = AgentServer()
+server = AgentServer(max_concurrent_jobs=5)
 
 
 @server.rtc_session(agent_name="voice-agent")
@@ -163,8 +164,8 @@ async def my_agent(ctx: agents.JobContext):
     base_stt = openai.STT(model="gpt-4o-transcribe")
 
     vad_model = silero.VAD.load(
-        min_speech_duration=0.03,
-        min_silence_duration=0.15,
+        min_speech_duration=0.1,
+        min_silence_duration=0.3,
     )
 
     streaming_stt = agents.stt.StreamAdapter(
@@ -178,7 +179,9 @@ async def my_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=streaming_stt,
         llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(voice="nova"),
+        tts=openai.TTS(voice="nova", streaming=True),
+        vad=vad_model,
+        allow_interruptions=False
     )
 
     # -------------------------
@@ -191,6 +194,9 @@ async def my_agent(ctx: agents.JobContext):
             user_id=user_id,
             character_data=character_data,
         ),
+        room_input_options=room_io.RoomInputOptions(
+            close_on_disconnect=False
+        )
     )
 
     # -------------------------
