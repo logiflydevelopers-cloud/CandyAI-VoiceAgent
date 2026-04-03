@@ -1,4 +1,5 @@
 from database.mongo import characters_collection
+from bson import ObjectId
 
 
 # -----------------------------------
@@ -39,24 +40,14 @@ def get_all_characters(limit=20):
 # -----------------------------------
 # GET SINGLE CHARACTER
 # -----------------------------------
-def get_character_by_id(uniqueId):
+def get_character_by_id(character_id):
 
-    doc = characters_collection.find_one({"uniqueId": uniqueId})
-
-    if not doc:
-        # ✅ fallback default girlfriend
-        return {
-            "id": "default",
-            "uniqueId": "gf_default",
-            "name": "Ava",
-            "age": "23",
-            "location": "Mumbai",
-            "occupation": "Designer",
-            "relationship": "Your caring girlfriend",
-            "personality": "Sweet, romantic, playful",
-            "hobbies": "Music, movies, chatting",
-            "description": "She loves you and always cares about you",
-            "language": "English",
-        }
+    try:
+        doc = characters_collection.find_one({
+            "_id": ObjectId(character_id) 
+        })
+    except Exception as e:
+        print("Invalid ObjectId:", e)
+        return None
 
     return serialize_character(doc)
