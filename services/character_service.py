@@ -7,22 +7,21 @@ from bson import ObjectId
 # -----------------------------------
 def serialize_character(doc):
     if not doc:
-        return None
+        raise ValueError("Cannot serialize empty character document")
 
     return {
-        "id": str(doc.get("_id")),
+        "id": str(doc["_id"]), 
         "uniqueId": doc.get("uniqueId"),
-        "name": doc.get("name", "Ava"),
-        "age": doc.get("age", ""),
-        "location": doc.get("location", ""),
-        "occupation": doc.get("occupation", ""),
-        "relationship": doc.get("relationship", "Your girlfriend"),
-        "personality": doc.get("personality", ""),
-        "hobbies": doc.get("hobbies", ""),
-        "description": doc.get("description", ""),
-        "language": doc.get("language", "English"),
+        "name": doc.get("name"),
+        "age": doc.get("age"),
+        "location": doc.get("location"),
+        "occupation": doc.get("occupation"),
+        "relationship": doc.get("relationship"),
+        "personality": doc.get("personality"),
+        "hobbies": doc.get("hobbies"),
+        "description": doc.get("description"),
+        "language": doc.get("language"),
     }
-
 
 # -----------------------------------
 # GET ALL CHARACTERS
@@ -44,10 +43,12 @@ def get_character_by_id(character_id):
 
     try:
         doc = characters_collection.find_one({
-            "_id": ObjectId(character_id) 
+            "_id": ObjectId(character_id)
         })
     except Exception as e:
-        print("Invalid ObjectId:", e)
-        return None
+        raise ValueError(f"Invalid character_id: {character_id}")
+
+    if not doc:
+        raise ValueError(f"Character not found for id: {character_id}")
 
     return serialize_character(doc)
