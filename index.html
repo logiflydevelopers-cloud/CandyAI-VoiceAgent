@@ -3,6 +3,19 @@
 <head>
   <title>Voice Agent Test</title>
 </head>
+<div id="logs" style="
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: 200px;
+  overflow: auto;
+  background: black;
+  color: lime;
+  font-size: 12px;
+  z-index: 9999;
+  padding: 5px;
+"></div>
 <body>
   <h2>🎤 Voice Agent Test</h2>
 
@@ -13,6 +26,16 @@
   <p><b>AI:</b> <span id="ai"></span></p>
 
   <script>
+
+    function log(msg) {
+      console.log(msg);
+
+      const el = document.getElementById("logs");
+      if (el) {
+        el.innerHTML += msg + "<br>";
+        el.scrollTop = el.scrollHeight;
+      }
+    }
     let ws;
     let audioContext;
     let processor;
@@ -29,7 +52,7 @@
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
-        console.log("✅ Connected");
+        log("✅ Connected");
 
         ws.send(JSON.stringify({
           user_id: "test_user",
@@ -91,32 +114,10 @@
     // START MIC
     // -----------------------------------
     async function start() {
-      try {
-        // 🎤 GET MIC FIRST
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 16000,
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-        });
+  try {
+    log("🚀 Start clicked");
 
-        // 🔌 THEN CONNECT WS
-        connect();
-
-        await new Promise((resolve) => {
-          const check = setInterval(() => {
-            if (ws && ws.readyState === 1) {
-              clearInterval(check);
-              resolve();
-            }
-          }, 50);
-        });
-
-    // -----------------------------------
-    // GET MIC PERMISSION
-    // -----------------------------------
+    // 🎤 GET MIC FIRST
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -126,16 +127,33 @@
       },
     });
 
-    // -----------------------------------
-    // AUDIO CONTEXT (iOS FIX)
-    // -----------------------------------
+    log("🎤 Mic permission granted");
+
+    // 🔌 CONNECT WS
+    connect();
+
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (ws && ws.readyState === 1) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 50);
+    });
+
+    log("🔌 WS ready");
+
+    // 🎧 AUDIO CONTEXT
     audioContext = new (window.AudioContext || window.webkitAudioContext)({
       sampleRate: 16000,
     });
 
-    // 🔥 CRITICAL FOR iOS
+    log("🎧 AudioContext state: " + audioContext.state);
+
+    // 🔥 iOS FIX
     if (audioContext.state === "suspended") {
       await audioContext.resume();
+      log("🔊 AudioContext resumed");
     }
 
     const source = audioContext.createMediaStreamSource(stream);
@@ -145,14 +163,17 @@
     source.connect(processor);
     processor.connect(audioContext.destination);
 
-    // -----------------------------------
-    // STREAM AUDIO
-    // -----------------------------------
+    // 🎤 STREAM AUDIO
     processor.onaudioprocess = (e) => {
       try {
-        if (!ws || ws.readyState !== 1) return;
+        if (!ws || ws.readyState !== 1) {
+          log("⚠️ WS not ready");
+          return;
+        }
 
         const input = e.inputBuffer.getChannelData(0);
+
+        log("🎤 Sending audio: " + input.length);
 
         const buffer = new ArrayBuffer(input.length * 2);
         const view = new DataView(buffer);
@@ -163,18 +184,18 @@
         }
 
         ws.send(buffer);
+
       } catch (err) {
-        console.error("Audio process error:", err);
+        log("❌ Audio error: " + err.message);
       }
     };
 
-    console.log("🎤 Recording started");
+    log("🎤 Recording started");
 
   } catch (err) {
-    console.error("❌ Start error:", err);
+    log("❌ Start error: " + err.message);
   }
-
-    }
+}
 
     // -----------------------------------
     // STOP
