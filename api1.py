@@ -70,34 +70,53 @@ async def voice_agent(ws: WebSocket):
         # -----------------------------------
         async def process_transcript():
             try:
-                # 🔥 TEST MODE: skip STT completely
-                await asyncio.sleep(1)
+                while True:
+                    # 🧠 get STT result
+                    data = await stt.get_transcript()
 
-                text = "hey, how are you"
+                    text = data.get("text", "")
+                    is_final = data.get("is_final", False)
 
-                print(f"🗣 User (FAKE): {text}")
+                    # 📝 partial transcript (live typing)
+                    if text:
+                        print(f"📝 Partial: {text}")
 
-                # 🧠 LLM
-                response_text = await llm.generate_response(
-                    user_id=user_id,
-                    character_id=character_id,
-                    user_text=text
-                )
+                        await ws.send_json({
+                            "type": "transcript",
+                            "text": text,
+                            "final": is_final
+                        })
 
-                print(f"🤖 AI: {response_text}")
+                    # 🔥 only respond on final speech
+                    if is_final and text.strip():
+                        print(f"🗣 User: {text}")
 
-                await ws.send_json({
-                    "type": "ai_text",
-                    "text": response_text
-                })
+                        # 🧠 LLM
+                        response_text = await llm.generate_response(
+                            user_id=user_id,
+                            character_id=character_id,
+                            user_text=text
+                        )
 
-                # 🔊 STREAM TTS
-                async for chunk in tts.stream_audio(response_text):
-                    await ws.send_bytes(chunk)
+                        print(f"🤖 AI: {response_text}")
 
-                await ws.send_json({
-                    "type": "audio_end"
-                })
+                        # send text to frontend
+                        await ws.send_json({
+                            "type": "ai_text",
+                            "text": response_text
+                        })
+
+                        # 🔊 stream TTS audio
+                        async for chunk in tts.stream_audio(response_text):
+                            await ws.send_bytes(chunk)
+
+                        # 🔚 audio end signal
+                        await ws.send_json({
+                            "type": "audio_end"
+                        })
+
+            except asyncio.CancelledError:
+                print("⚠️ Transcript task cancelled")
 
             except Exception as e:
                 print("❌ Process Error:", e)
