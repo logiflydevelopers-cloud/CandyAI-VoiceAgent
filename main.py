@@ -7,7 +7,7 @@ from livekit.agents import (
     ChatContext,
     room_io,
 )
-from livekit.plugins import openai, silero
+from livekit.plugins import openai, silero, deepgram
 from services.prompt_builder import build_character_prompt
 from services.memory import SimpleMemory
 from services.character_service import get_character_by_id
@@ -36,7 +36,7 @@ class VoiceAgent(Agent):
         self.user_id = user_id
         self.character_data = character_data
         self.memory_store = memory_store
-        self.is_speaking = False   # ✅ NEW (sync fix)
+        self.is_speaking = False   #(sync fix)
 
         super().__init__(
             chat_ctx=chat_ctx,
@@ -45,9 +45,9 @@ class VoiceAgent(Agent):
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
 
-        # 🚫 BLOCK if agent is speaking
+        # BLOCK if agent is speaking
         if self.is_speaking:
-            return
+            pass
 
         user_text = new_message.text_content
         logging.info(f"User said: {user_text}")
@@ -92,7 +92,7 @@ Tone rules:
 - angry → calm
 """
 
-        # ✅ Inject less frequently (performance + stability)
+        # Inject less frequently (performance + stability)
         if len(ctx["history"]) % 3 == 0:
             turn_ctx.add_message(role="system", content=dynamic_prompt)
 
@@ -144,13 +144,15 @@ async def my_agent(ctx: agents.JobContext):
     # -------------------------
     # STT SETUP (OPTIMIZED)
     # -------------------------
-    base_stt = openai.STT(
-        model="gpt-4o-mini-transcribe"
+    base_stt = deepgram.STT(
+        model="nova-2",   # or nova-3 if available in your plan
+        language="en",
+        api_key=os.getenv("DEEPGRAM_API_KEY"),
     )
 
     vad_model = silero.VAD.load(
-        min_speech_duration=0.25,   # ✅ less noise triggers
-        min_silence_duration=0.7,  # ✅ smoother transitions
+        min_speech_duration=0.25,   
+        min_silence_duration=0.7,  
     )
 
     streaming_stt = agents.stt.StreamAdapter(
@@ -170,9 +172,13 @@ async def my_agent(ctx: agents.JobContext):
             voice="nova",
             speed=1.15
         ),
-        allow_interruptions=True ,  # ✅ CRITICAL FIX
+        allow_interruptions=True ,  
         preemptive_generation=False
     )
+
+    @session.on("stt_event")
+    def on_stt_event(event):
+        print("STT EVENT:", event)
 
     agent = VoiceAgent(
         chat_ctx=initial_ctx,
@@ -209,7 +215,6 @@ async def my_agent(ctx: agents.JobContext):
     await safe_reply(
         "Start with a sweet, natural girlfriend-style greeting."
     )
-
 
 # --------------------------------------------------
 # ENTRYPOINT

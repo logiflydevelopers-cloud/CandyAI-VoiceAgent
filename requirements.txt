@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+uvloop
 python-dotenv
 httpx
 
@@ -7,6 +8,7 @@ livekit
 livekit-agents
 livekit-plugins-openai
 livekit-plugins-silero
+livekit-plugins-deepgram
 
 openai
 pymongo
