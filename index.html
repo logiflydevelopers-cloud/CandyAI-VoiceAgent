@@ -91,21 +91,28 @@
     // START MIC
     // -----------------------------------
     async function start() {
-  try {
-    // -----------------------------------
-    // CONNECT WS FIRST
-    // -----------------------------------
-    connect();
+      try {
+        // 🎤 GET MIC FIRST
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
 
-    // wait until WS is open (VERY IMPORTANT)
-    await new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (ws && ws.readyState === 1) {
-          clearInterval(check);
-          resolve();
-        }
-      }, 50);
-    });
+        // 🔌 THEN CONNECT WS
+        connect();
+
+        await new Promise((resolve) => {
+          const check = setInterval(() => {
+            if (ws && ws.readyState === 1) {
+              clearInterval(check);
+              resolve();
+            }
+          }, 50);
+        });
 
     // -----------------------------------
     // GET MIC PERMISSION

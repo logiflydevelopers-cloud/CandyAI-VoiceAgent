@@ -11,7 +11,6 @@ router = APIRouter()
 llm = LLMService()
 tts = ElevenLabsTTS()
 
-
 @router.websocket("/voice")
 async def voice_agent(ws: WebSocket):
     await ws.accept()
@@ -34,16 +33,13 @@ async def voice_agent(ws: WebSocket):
         await ws.close()
         return
 
+    print(f"✅ Connected: user={user_id}, character={character_id}")
+
     # -----------------------------------
-    # INIT STT
+    # INIT STT (LAZY)
     # -----------------------------------
     stt = DeepgramSTT()
-    await stt.connect()
-
-    # IMPORTANT: give Deepgram time to be ready
-    await asyncio.sleep(0.5)
-
-    print(f"✅ Connected: user={user_id}, character={character_id}")
+    stt_connected = False
 
     # -----------------------------------
     # TASKS
@@ -56,12 +52,24 @@ async def voice_agent(ws: WebSocket):
         # RECEIVE AUDIO
         # -----------------------------------
         async def receive_audio():
+            nonlocal stt_connected
+
             try:
                 while True:
                     audio_chunk = await ws.receive_bytes()
+
+                    print("📦 Audio chunk:", len(audio_chunk))
+
+                    # 🔥 CONNECT ON FIRST AUDIO
+                    if not stt_connected:
+                        await stt.connect()
+                        stt_connected = True
+                        print("🎧 Deepgram connected")
+
                     await stt.send_audio(audio_chunk)
+
             except WebSocketDisconnect:
-                pass
+                print("❌ Client disconnected (receive)")
             except Exception as e:
                 print("❌ Receive Error:", e)
 
@@ -71,13 +79,20 @@ async def voice_agent(ws: WebSocket):
         async def process_transcript():
             try:
                 while True:
-                    # 🧠 get STT result
+                    # ⛔ wait until STT is ready
+                    if not stt_connected:
+                        await asyncio.sleep(0.1)
+                        continue
+
                     data = await stt.get_transcript()
+
+                    if not data:
+                        continue
 
                     text = data.get("text", "")
                     is_final = data.get("is_final", False)
 
-                    # 📝 partial transcript (live typing)
+                    # 📝 partial transcript
                     if text:
                         print(f"📝 Partial: {text}")
 
@@ -87,7 +102,7 @@ async def voice_agent(ws: WebSocket):
                             "final": is_final
                         })
 
-                    # 🔥 only respond on final speech
+                    # 🔥 FINAL SPEECH → PROCESS
                     if is_final and text.strip():
                         print(f"🗣 User: {text}")
 
@@ -100,24 +115,23 @@ async def voice_agent(ws: WebSocket):
 
                         print(f"🤖 AI: {response_text}")
 
-                        # send text to frontend
+                        # send text
                         await ws.send_json({
                             "type": "ai_text",
                             "text": response_text
                         })
 
-                        # 🔊 stream TTS audio
+                        # 🔊 STREAM TTS
                         async for chunk in tts.stream_audio(response_text):
                             await ws.send_bytes(chunk)
 
-                        # 🔚 audio end signal
+                        # 🔚 end signal
                         await ws.send_json({
                             "type": "audio_end"
                         })
 
             except asyncio.CancelledError:
                 print("⚠️ Transcript task cancelled")
-
             except Exception as e:
                 print("❌ Process Error:", e)
 
@@ -131,7 +145,6 @@ async def voice_agent(ws: WebSocket):
 
     except WebSocketDisconnect:
         print(f"❌ Disconnected: user={user_id}")
-
     except Exception as e:
         print("❌ Socket Error:", e)
 
@@ -145,5 +158,7 @@ async def voice_agent(ws: WebSocket):
         if process_task:
             process_task.cancel()
 
-        await stt.close()
+        if stt_connected:
+            await stt.close()
+
         print("🛑 Connection cleaned up")
