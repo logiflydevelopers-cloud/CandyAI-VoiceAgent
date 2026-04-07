@@ -31,11 +31,14 @@ class DeepgramSTT:
                     transcript = alt[0].transcript
 
                     if transcript and transcript.strip():
-                        asyncio.create_task(
+                        loop = asyncio.get_event_loop()
+
+                        asyncio.run_coroutine_threadsafe(
                             self.transcript_queue.put({
                                 "text": transcript,
                                 "is_final": result.is_final
-                            })
+                            }),
+                            loop
                         )
 
                 except Exception as e:
