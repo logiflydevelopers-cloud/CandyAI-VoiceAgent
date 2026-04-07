@@ -16,41 +16,45 @@ class DeepgramSTT:
         try:
             self.connection = self.dg_client.listen.live.v("1")
 
-            # ✅ FIX: handler MUST accept (self, event)
-            def handle_transcript(_, event):
+            # 🔥 FIXED HANDLER (Deepgram v3 compatible)
+            def handle_transcript(*args, **kwargs):
                 try:
-                    if not event:
+                    result = kwargs.get("result")
+
+                    if not result:
                         return
 
-                    alt = event.channel.alternatives
+                    alt = result.channel.alternatives
                     if not alt:
                         return
 
                     transcript = alt[0].transcript
 
-                    if transcript.strip():
+                    if transcript and transcript.strip():
                         asyncio.create_task(
                             self.transcript_queue.put({
                                 "text": transcript,
-                                "is_final": event.is_final
+                                "is_final": result.is_final
                             })
                         )
 
                 except Exception as e:
                     print("❌ Transcript Error:", e)
 
-            def handle_open(_, event):
+            # 🔥 OPEN HANDLER
+            def handle_open(*args, **kwargs):
                 print("🟢 Deepgram connected")
 
-            def handle_error(_, event):
-                print("❌ Deepgram Error:", event)
+            # 🔥 ERROR HANDLER
+            def handle_error(*args, **kwargs):
+                print("❌ Deepgram Error:", kwargs)
 
-            # ✅ REGISTER HANDLERS
+            # ✅ REGISTER EVENTS
             self.connection.on(LiveTranscriptionEvents.Transcript, handle_transcript)
             self.connection.on(LiveTranscriptionEvents.Open, handle_open)
             self.connection.on(LiveTranscriptionEvents.Error, handle_error)
 
-            # ❗ IMPORTANT: DO NOT AWAIT
+            # ❗ DO NOT AWAIT (important)
             self.connection.start({
                 "model": "nova-2",
                 "language": "en",
@@ -69,8 +73,7 @@ class DeepgramSTT:
     async def send_audio(self, audio_chunk: bytes):
         try:
             if self.connection:
-                # ❗ DO NOT AWAIT
-                self.connection.send(audio_chunk)
+                self.connection.send(audio_chunk)  # ❗ no await
         except Exception as e:
             print("❌ Send Audio Error:", e)
 
@@ -86,7 +89,7 @@ class DeepgramSTT:
     async def close(self):
         try:
             if self.connection:
-                self.connection.finish()
+                self.connection.finish()  # ❗ no await
                 print("🔴 Deepgram closed")
         except Exception as e:
             print("❌ Close Error:", e)
