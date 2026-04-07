@@ -41,7 +41,7 @@ async def voice_agent(ws: WebSocket):
     await stt.connect()
 
     # IMPORTANT: give Deepgram time to be ready
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(0.5)
 
     print(f"✅ Connected: user={user_id}, character={character_id}")
 

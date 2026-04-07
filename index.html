@@ -91,19 +91,60 @@
     // START MIC
     // -----------------------------------
     async function start() {
-      connect();
+  try {
+    // -----------------------------------
+    // CONNECT WS FIRST
+    // -----------------------------------
+    connect();
 
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // wait until WS is open (VERY IMPORTANT)
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (ws && ws.readyState === 1) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 50);
+    });
 
-      audioContext = new AudioContext({ sampleRate: 16000 });
+    // -----------------------------------
+    // GET MIC PERMISSION
+    // -----------------------------------
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    });
 
-      const source = audioContext.createMediaStreamSource(stream);
-      processor = audioContext.createScriptProcessor(4096, 1, 1);
+    // -----------------------------------
+    // AUDIO CONTEXT (iOS FIX)
+    // -----------------------------------
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 16000,
+    });
 
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+    // 🔥 CRITICAL FOR iOS
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
 
-      processor.onaudioprocess = (e) => {
+    const source = audioContext.createMediaStreamSource(stream);
+
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    // -----------------------------------
+    // STREAM AUDIO
+    // -----------------------------------
+    processor.onaudioprocess = (e) => {
+      try {
+        if (!ws || ws.readyState !== 1) return;
+
         const input = e.inputBuffer.getChannelData(0);
 
         const buffer = new ArrayBuffer(input.length * 2);
@@ -114,19 +155,35 @@
           view.setInt16(i * 2, s * 0x7fff, true);
         }
 
-        if (ws && ws.readyState === 1) {
-          ws.send(buffer);
-        }
-      };
+        ws.send(buffer);
+      } catch (err) {
+        console.error("Audio process error:", err);
+      }
+    };
+
+    console.log("🎤 Recording started");
+
+  } catch (err) {
+    console.error("❌ Start error:", err);
+  }
+
     }
 
     // -----------------------------------
     // STOP
     // -----------------------------------
     function stop() {
-      processor?.disconnect();
-      ws?.close();
-    }
+  try {
+    processor?.disconnect();
+    stream?.getTracks().forEach(track => track.stop());
+    audioContext?.close();
+    ws?.close();
+
+    console.log("🛑 Stopped");
+  } catch (err) {
+    console.error("Stop error:", err);
+  }
+}
   </script>
 </body>
 </html>
