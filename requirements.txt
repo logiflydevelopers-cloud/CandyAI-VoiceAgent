@@ -1,14 +1,7 @@
 fastapi
 uvicorn
-uvloop
+deepgram-sdk
+openai
 python-dotenv
 httpx
-
-livekit
-livekit-agents
-livekit-plugins-openai
-livekit-plugins-silero
-livekit-plugins-deepgram
-
-openai
 pymongo

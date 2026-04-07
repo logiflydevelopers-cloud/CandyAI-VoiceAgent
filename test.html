@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Voice Agent Test</title>
+</head>
+<body>
+  <h2>🎤 Voice Agent Test</h2>
+
+  <button onclick="start()">Start</button>
+  <button onclick="stop()">Stop</button>
+
+  <p><b>User:</b> <span id="user"></span></p>
+  <p><b>AI:</b> <span id="ai"></span></p>
+
+  <script>
+    let ws;
+    let audioContext;
+    let processor;
+    let stream;
+
+    let queue = [];
+    let isPlaying = false;
+
+    // -----------------------------------
+    // CONNECT WS
+    // -----------------------------------
+    function connect() {
+      ws = new WebSocket("ws://127.0.0.1:8000/voice");
+      ws.binaryType = "arraybuffer";
+
+      ws.onopen = () => {
+        console.log("✅ Connected");
+
+        ws.send(JSON.stringify({
+          user_id: "test_user",
+          character_id: "69afc5a36b69a290cae6969e"
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        if (typeof event.data === "string") {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "transcript") {
+            document.getElementById("user").innerText = data.text;
+          }
+
+          if (data.type === "ai_text") {
+            document.getElementById("ai").innerText = data.text;
+          }
+
+        } else {
+          enqueueAudio(new Blob([event.data], { type: "audio/mpeg" }));
+        }
+      };
+    }
+
+    // -----------------------------------
+    // AUDIO PLAYBACK (SMOOTH)
+    // -----------------------------------
+    function enqueueAudio(chunk) {
+      queue.push(chunk);
+      if (!isPlaying) playQueue();
+    }
+
+    async function playQueue() {
+      if (!audioContext) {
+        audioContext = new AudioContext();
+      }
+
+      isPlaying = true;
+
+      while (queue.length > 0) {
+        const chunk = queue.shift();
+
+        const arrayBuffer = await chunk.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.start();
+
+        await new Promise(res => source.onended = res);
+      }
+
+      isPlaying = false;
+    }
+
+    // -----------------------------------
+    // START MIC
+    // -----------------------------------
+    async function start() {
+      connect();
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      audioContext = new AudioContext({ sampleRate: 16000 });
+
+      const source = audioContext.createMediaStreamSource(stream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+
+        const buffer = new ArrayBuffer(input.length * 2);
+        const view = new DataView(buffer);
+
+        for (let i = 0; i < input.length; i++) {
+          let s = Math.max(-1, Math.min(1, input[i]));
+          view.setInt16(i * 2, s * 0x7fff, true);
+        }
+
+        if (ws && ws.readyState === 1) {
+          ws.send(buffer);
+        }
+      };
+    }
+
+    // -----------------------------------
+    // STOP
+    // -----------------------------------
+    function stop() {
+      processor?.disconnect();
+      ws?.close();
+    }
+  </script>
+</body>
+</html>

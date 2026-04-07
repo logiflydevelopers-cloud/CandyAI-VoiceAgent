@@ -1,76 +1,76 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import os
-import json
+# from fastapi import FastAPI
+# from pydantic import BaseModel
+# import os
+# import json
 
-from livekit import api
+# from livekit import api
 
-app = FastAPI()
-
-
-class TokenRequest(BaseModel):
-    user_id: str
-    character_id: str
+# app = FastAPI()
 
 
-@app.get("/")
-def health():
-    return {"status": "ok"}
+# class TokenRequest(BaseModel):
+#     user_id: str
+#     character_id: str
 
 
-@app.post("/get-token")
-async def get_token(data: TokenRequest):
+# @app.get("/")
+# def health():
+#     return {"status": "ok"}
 
-    print("Incoming:", data.dict())
 
-    room = f"room_{data.character_id}"
+# @app.post("/get-token")
+# async def get_token(data: TokenRequest):
 
-    # -------------------------
-    # GENERATE TOKEN
-    # -------------------------
-    token = (
-        api.AccessToken(
-            os.getenv("LIVEKIT_API_KEY"),
-            os.getenv("LIVEKIT_API_SECRET"),
-        )
-        .with_identity(data.user_id)
-        .with_name(data.user_id)
-        .with_metadata(json.dumps({
-            "character_id": data.character_id
-        }))
-        .with_grants(
-            api.VideoGrants(
-                room_join=True,
-                room=room,
-            )
-        )
-        .to_jwt()
-    )
+#     print("Incoming:", data.dict())
 
-    # -------------------------
-    # DISPATCH AGENT (FIXED)
-    # -------------------------
-    try:
-        lkapi = api.LiveKitAPI(
-            os.getenv("LIVEKIT_URL"),
-            os.getenv("LIVEKIT_API_KEY"),
-            os.getenv("LIVEKIT_API_SECRET"),
-        )
+#     room = f"room_{data.character_id}"
 
-        await lkapi.agent_dispatch.create_dispatch( 
-            api.CreateAgentDispatchRequest(
-                agent_name="voice-agent",
-                room=room,
-            )
-        )
+#     # -------------------------
+#     # GENERATE TOKEN
+#     # -------------------------
+#     token = (
+#         api.AccessToken(
+#             os.getenv("LIVEKIT_API_KEY"),
+#             os.getenv("LIVEKIT_API_SECRET"),
+#         )
+#         .with_identity(data.user_id)
+#         .with_name(data.user_id)
+#         .with_metadata(json.dumps({
+#             "character_id": data.character_id
+#         }))
+#         .with_grants(
+#             api.VideoGrants(
+#                 room_join=True,
+#                 room=room,
+#             )
+#         )
+#         .to_jwt()
+#     )
 
-        print("Agent dispatched to room:", room)
+#     # -------------------------
+#     # DISPATCH AGENT (FIXED)
+#     # -------------------------
+#     try:
+#         lkapi = api.LiveKitAPI(
+#             os.getenv("LIVEKIT_URL"),
+#             os.getenv("LIVEKIT_API_KEY"),
+#             os.getenv("LIVEKIT_API_SECRET"),
+#         )
 
-    except Exception as e:
-        print("Agent dispatch failed:", str(e))
+#         await lkapi.agent_dispatch.create_dispatch( 
+#             api.CreateAgentDispatchRequest(
+#                 agent_name="voice-agent",
+#                 room=room,
+#             )
+#         )
 
-    return {
-        "token": token,
-        "url": os.getenv("LIVEKIT_URL"),
-        "room": room
-    }
+#         print("Agent dispatched to room:", room)
+
+#     except Exception as e:
+#         print("Agent dispatch failed:", str(e))
+
+#     return {
+#         "token": token,
+#         "url": os.getenv("LIVEKIT_URL"),
+#         "room": room
+#     }

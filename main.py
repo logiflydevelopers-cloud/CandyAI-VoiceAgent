@@ -1,225 +1,225 @@
-from dotenv import load_dotenv
-from livekit import agents
-from livekit.agents import (
-    AgentServer,
-    Agent,
-    AgentSession,
-    ChatContext,
-    room_io,
-)
-from livekit.plugins import openai, silero, deepgram
-from services.prompt_builder import build_character_prompt
-from services.memory import SimpleMemory
-from services.character_service import get_character_by_id
+# from dotenv import load_dotenv
+# from livekit import agents
+# from livekit.agents import (
+#     AgentServer,
+#     Agent,
+#     AgentSession,
+#     ChatContext,
+#     room_io,
+# )
+# from livekit.plugins import openai, silero, deepgram
+# from services.prompt_builder import build_character_prompt
+# from services.memory import SimpleMemory
+# from services.character_service import get_character_by_id
 
-import logging
-import json
-import os
-import asyncio
+# import logging
+# import json
+# import os
+# import asyncio
 
-logging.getLogger("pymongo").setLevel(logging.WARNING)
+# logging.getLogger("pymongo").setLevel(logging.WARNING)
 
-memory_store = SimpleMemory()
+# memory_store = SimpleMemory()
 
-load_dotenv()
+# load_dotenv()
 
-print("LIVEKIT_URL:", os.getenv("LIVEKIT_URL"))
-print("LIVEKIT_API_KEY:", os.getenv("LIVEKIT_API_KEY"))
+# print("LIVEKIT_URL:", os.getenv("LIVEKIT_URL"))
+# print("LIVEKIT_API_KEY:", os.getenv("LIVEKIT_API_KEY"))
 
-# --------------------------------------------------
-# VOICE AGENT
-# --------------------------------------------------
+# # --------------------------------------------------
+# # VOICE AGENT
+# # --------------------------------------------------
 
-class VoiceAgent(Agent):
+# class VoiceAgent(Agent):
 
-    def __init__(self, chat_ctx: ChatContext, user_id: str, character_data):
-        self.user_id = user_id
-        self.character_data = character_data
-        self.memory_store = memory_store
-        self.is_speaking = False   #(sync fix)
+#     def __init__(self, chat_ctx: ChatContext, user_id: str, character_data):
+#         self.user_id = user_id
+#         self.character_data = character_data
+#         self.memory_store = memory_store
+#         self.is_speaking = False   #(sync fix)
 
-        super().__init__(
-            chat_ctx=chat_ctx,
-            instructions=build_character_prompt(character_data)
-        )
+#         super().__init__(
+#             chat_ctx=chat_ctx,
+#             instructions=build_character_prompt(character_data)
+#         )
 
-    async def on_user_turn_completed(self, turn_ctx, new_message):
+#     async def on_user_turn_completed(self, turn_ctx, new_message):
 
-        # BLOCK if agent is speaking
-        if self.is_speaking:
-            pass
+#         # BLOCK if agent is speaking
+#         if self.is_speaking:
+#             pass
 
-        user_text = new_message.text_content
-        logging.info(f"User said: {user_text}")
+#         user_text = new_message.text_content
+#         logging.info(f"User said: {user_text}")
 
-        # Store memory
-        self.memory_store.add_message(self.user_id, "user", user_text)
+#         # Store memory
+#         self.memory_store.add_message(self.user_id, "user", user_text)
 
-        text = user_text.lower()
+#         text = user_text.lower()
 
-        # Mood detection
-        if any(x in text for x in ["sad", "upset", "bad day", "depressed"]):
-            mood = "sad"
-        elif any(x in text for x in ["love", "baby", "miss you"]):
-            mood = "flirty"
-        elif any(x in text for x in ["angry", "mad", "frustrated"]):
-            mood = "angry"
-        elif any(x in text for x in ["happy", "great", "awesome"]):
-            mood = "happy"
-        else:
-            mood = "neutral"
+#         # Mood detection
+#         if any(x in text for x in ["sad", "upset", "bad day", "depressed"]):
+#             mood = "sad"
+#         elif any(x in text for x in ["love", "baby", "miss you"]):
+#             mood = "flirty"
+#         elif any(x in text for x in ["angry", "mad", "frustrated"]):
+#             mood = "angry"
+#         elif any(x in text for x in ["happy", "great", "awesome"]):
+#             mood = "happy"
+#         else:
+#             mood = "neutral"
 
-        self.memory_store.set_mood(self.user_id, mood)
+#         self.memory_store.set_mood(self.user_id, mood)
 
-        # Name detection
-        if "my name is" in text:
-            name = user_text.split("my name is")[-1].strip().split(" ")[0]
-            self.memory_store.set_name(self.user_id, name)
+#         # Name detection
+#         if "my name is" in text:
+#             name = user_text.split("my name is")[-1].strip().split(" ")[0]
+#             self.memory_store.set_name(self.user_id, name)
 
-        ctx = self.memory_store.get_context(self.user_id)
+#         ctx = self.memory_store.get_context(self.user_id)
 
-        dynamic_prompt = f"""
-User name: {ctx["name"]}
-Mood: {ctx["mood"]}
+#         dynamic_prompt = f"""
+# User name: {ctx["name"]}
+# Mood: {ctx["mood"]}
 
-Recent conversation:
-{ctx["history"]}
+# Recent conversation:
+# {ctx["history"]}
 
-Tone rules:
-- sad → caring
-- happy → energetic
-- flirty → playful
-- angry → calm
-"""
+# Tone rules:
+# - sad → caring
+# - happy → energetic
+# - flirty → playful
+# - angry → calm
+# """
 
-        # Inject less frequently (performance + stability)
-        if len(ctx["history"]) % 3 == 0:
-            turn_ctx.add_message(role="system", content=dynamic_prompt)
-
-
-# --------------------------------------------------
-# SERVER
-# --------------------------------------------------
-
-server = AgentServer()
+#         # Inject less frequently (performance + stability)
+#         if len(ctx["history"]) % 3 == 0:
+#             turn_ctx.add_message(role="system", content=dynamic_prompt)
 
 
-@server.rtc_session(agent_name="voice-agent")
-async def my_agent(ctx: agents.JobContext):
+# # --------------------------------------------------
+# # SERVER
+# # --------------------------------------------------
 
-    print("Agent job received")
+# server = AgentServer()
 
-    await ctx.connect()
-    print("Room connected")
 
-    @ctx.room.on("track_subscribed")
-    def on_track(track, pub, participant):
-        print("Received track from:", participant.identity, "| kind:", track.kind)
+# @server.rtc_session(agent_name="voice-agent")
+# async def my_agent(ctx: agents.JobContext):
 
-    participant = await ctx.wait_for_participant()
+#     print("Agent job received")
 
-    if not participant:
-        print("No participant joined")
-        return
+#     await ctx.connect()
+#     print("Room connected")
 
-    user_id = participant.identity
-    print("User ID:", user_id)
+#     @ctx.room.on("track_subscribed")
+#     def on_track(track, pub, participant):
+#         print("Received track from:", participant.identity, "| kind:", track.kind)
 
-    metadata = {}
+#     participant = await ctx.wait_for_participant()
 
-    if participant.metadata:
-        try:
-            metadata = json.loads(participant.metadata)
-        except Exception as e:
-            print("Metadata parse failed:", e)
+#     if not participant:
+#         print("No participant joined")
+#         return
 
-    character_id = metadata.get("character_id", "gf_1")
-    print("Character ID:", character_id)
+#     user_id = participant.identity
+#     print("User ID:", user_id)
 
-    character_data = get_character_by_id(character_id)
-    print("Character loaded:", character_data.get("name"))
+#     metadata = {}
 
-    initial_ctx = ChatContext()
+#     if participant.metadata:
+#         try:
+#             metadata = json.loads(participant.metadata)
+#         except Exception as e:
+#             print("Metadata parse failed:", e)
 
-    # -------------------------
-    # STT SETUP (OPTIMIZED)
-    # -------------------------
-    base_stt = deepgram.STT(
-        model="nova-2",   # or nova-3 if available in your plan
-        language="en",
-        api_key=os.getenv("DEEPGRAM_API_KEY"),
-    )
+#     character_id = metadata.get("character_id", "gf_1")
+#     print("Character ID:", character_id)
 
-    vad_model = silero.VAD.load(
-        min_speech_duration=0.25,   
-        min_silence_duration=0.7,  
-    )
+#     character_data = get_character_by_id(character_id)
+#     print("Character loaded:", character_data.get("name"))
 
-    streaming_stt = agents.stt.StreamAdapter(
-        stt=base_stt,
-        vad=vad_model,
-    )
+#     initial_ctx = ChatContext()
 
-    # -------------------------
-    # SESSION SETUP (FIXED)
-    # -------------------------
-    session = AgentSession(
-        stt=streaming_stt,
-        llm=openai.LLM(
-            model="gpt-4o-mini"
-        ),
-        tts=openai.TTS(
-            voice="nova",
-            speed=1.15
-        ),
-        allow_interruptions=True ,  
-        preemptive_generation=False
-    )
+#     # -------------------------
+#     # STT SETUP (OPTIMIZED)
+#     # -------------------------
+#     base_stt = deepgram.STT(
+#         model="nova-2",   # or nova-3 if available in your plan
+#         language="en",
+#         api_key=os.getenv("DEEPGRAM_API_KEY"),
+#     )
 
-    @session.on("stt_event")
-    def on_stt_event(event):
-        print("STT EVENT:", event)
+#     vad_model = silero.VAD.load(
+#         min_speech_duration=0.25,   
+#         min_silence_duration=0.7,  
+#     )
 
-    agent = VoiceAgent(
-        chat_ctx=initial_ctx,
-        user_id=user_id,
-        character_data=character_data,
-    )
+#     streaming_stt = agents.stt.StreamAdapter(
+#         stt=base_stt,
+#         vad=vad_model,
+#     )
 
-    await session.start(
-        room=ctx.room,
-        agent=agent,
-        room_input_options=room_io.RoomInputOptions(
-            close_on_disconnect=False
-        )
-    )
+#     # -------------------------
+#     # SESSION SETUP (FIXED)
+#     # -------------------------
+#     session = AgentSession(
+#         stt=streaming_stt,
+#         llm=openai.LLM(
+#             model="gpt-4o-mini"
+#         ),
+#         tts=openai.TTS(
+#             voice="nova",
+#             speed=1.15
+#         ),
+#         allow_interruptions=True ,  
+#         preemptive_generation=False
+#     )
 
-    # -------------------------
-    # WRAP REPLY FOR SYNC
-    # -------------------------
-    async def safe_reply(instructions):
-        if agent.is_speaking:
-            return   # extra safety
+#     @session.on("stt_event")
+#     def on_stt_event(event):
+#         print("STT EVENT:", event)
 
-        agent.is_speaking = True
+#     agent = VoiceAgent(
+#         chat_ctx=initial_ctx,
+#         user_id=user_id,
+#         character_data=character_data,
+#     )
 
-        await session.generate_reply(
-            instructions=instructions
-        )
+#     await session.start(
+#         room=ctx.room,
+#         agent=agent,
+#         room_input_options=room_io.RoomInputOptions(
+#             close_on_disconnect=False
+#         )
+#     )
 
-        agent.is_speaking = False
+#     # -------------------------
+#     # WRAP REPLY FOR SYNC
+#     # -------------------------
+#     async def safe_reply(instructions):
+#         if agent.is_speaking:
+#             return   # extra safety
 
-    # -------------------------
-    # INITIAL GREETING
-    # -------------------------
-    await safe_reply(
-        "Start with a sweet, natural girlfriend-style greeting."
-    )
+#         agent.is_speaking = True
 
-# --------------------------------------------------
-# ENTRYPOINT
-# --------------------------------------------------
+#         await session.generate_reply(
+#             instructions=instructions
+#         )
 
-if __name__ == "__main__":
-    from livekit.agents import cli
-    cli.run_app(server)
+#         agent.is_speaking = False
+
+#     # -------------------------
+#     # INITIAL GREETING
+#     # -------------------------
+#     await safe_reply(
+#         "Start with a sweet, natural girlfriend-style greeting."
+#     )
+
+# # --------------------------------------------------
+# # ENTRYPOINT
+# # --------------------------------------------------
+
+# if __name__ == "__main__":
+#     from livekit.agents import cli
+#     cli.run_app(server)
