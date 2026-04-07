@@ -25,7 +25,7 @@
     // CONNECT WS
     // -----------------------------------
     function connect() {
-      ws = new WebSocket("ws://127.0.0.1:8000/voice");
+      ws = new WebSocket("ws://candyai-voiceagent.onrender.com/voice");
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
