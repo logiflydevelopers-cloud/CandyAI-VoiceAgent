@@ -114,104 +114,104 @@
     // START MIC
     // -----------------------------------
     async function start() {
-  try {
-    log("🚀 Start clicked");
+    try {
+      log("🚀 Start clicked");
 
-    // 🎤 GET MIC FIRST
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
+      // 🎤 GET MIC FIRST
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+
+      log("🎤 Mic permission granted");
+
+      // 🔌 CONNECT WS
+      connect();
+
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (ws && ws.readyState === 1) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 50);
+      });
+
+      log("🔌 WS ready");
+
+      // 🎧 AUDIO CONTEXT
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: 16000,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+      });
 
-    log("🎤 Mic permission granted");
+      log("🎧 AudioContext state: " + audioContext.state);
 
-    // 🔌 CONNECT WS
-    connect();
-
-    await new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (ws && ws.readyState === 1) {
-          clearInterval(check);
-          resolve();
-        }
-      }, 50);
-    });
-
-    log("🔌 WS ready");
-
-    // 🎧 AUDIO CONTEXT
-    audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: 16000,
-    });
-
-    log("🎧 AudioContext state: " + audioContext.state);
-
-    // 🔥 iOS FIX
-    if (audioContext.state === "suspended") {
-      await audioContext.resume();
-      log("🔊 AudioContext resumed");
-    }
-
-    const source = audioContext.createMediaStreamSource(stream);
-
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-    source.connect(processor);
-    processor.connect(audioContext.destination);
-
-    // 🎤 STREAM AUDIO
-    processor.onaudioprocess = (e) => {
-      try {
-        if (!ws || ws.readyState !== 1) {
-          log("⚠️ WS not ready");
-          return;
-        }
-
-        const input = e.inputBuffer.getChannelData(0);
-
-        log("🎤 Sending audio: " + input.length);
-
-        const buffer = new ArrayBuffer(input.length * 2);
-        const view = new DataView(buffer);
-
-        for (let i = 0; i < input.length; i++) {
-          let s = Math.max(-1, Math.min(1, input[i]));
-          view.setInt16(i * 2, s * 0x7fff, true);
-        }
-
-        ws.send(buffer);
-
-      } catch (err) {
-        log("❌ Audio error: " + err.message);
+      // 🔥 iOS FIX
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+        log("🔊 AudioContext resumed");
       }
-    };
 
-    log("🎤 Recording started");
+      const source = audioContext.createMediaStreamSource(stream);
 
-  } catch (err) {
-    log("❌ Start error: " + err.message);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      // 🎤 STREAM AUDIO
+      processor.onaudioprocess = (e) => {
+        try {
+          if (!ws || ws.readyState !== 1) {
+            log("⚠️ WS not ready");
+            return;
+          }
+
+          const input = e.inputBuffer.getChannelData(0);
+
+          log("🎤 Sending audio: " + input.length);
+
+          const buffer = new ArrayBuffer(input.length * 2);
+          const view = new DataView(buffer);
+
+          for (let i = 0; i < input.length; i++) {
+            let s = Math.max(-1, Math.min(1, input[i]));
+            view.setInt16(i * 2, s * 0x7fff, true);
+          }
+
+          ws.send(buffer);
+
+        } catch (err) {
+          log("❌ Audio error: " + err.message);
+        }
+      };
+
+      log("🎤 Recording started");
+
+    } catch (err) {
+      log("❌ Start error: " + err.message);
+    }
   }
-}
 
     // -----------------------------------
     // STOP
     // -----------------------------------
-    function stop() {
-  try {
-    processor?.disconnect();
-    stream?.getTracks().forEach(track => track.stop());
-    audioContext?.close();
-    ws?.close();
+   function stop() {
+      try {
+        processor?.disconnect();
+        stream?.getTracks().forEach(track => track.stop());
+        audioContext?.close();
+        ws?.close();
 
-    console.log("🛑 Stopped");
-  } catch (err) {
-    console.error("Stop error:", err);
-  }
-}
+        log("🛑 Stopped");
+      } catch (err) {
+        log("❌ Stop error: " + err.message);
+      }
+    }
   </script>
 </body>
 </html>

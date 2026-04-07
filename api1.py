@@ -56,12 +56,29 @@ async def voice_agent(ws: WebSocket):
 
             try:
                 while True:
-                    audio_chunk = await ws.receive_bytes()
+                    message = await ws.receive()
 
-                    print("📦 Audio chunk:", len(audio_chunk))
+                    # 🔥 HANDLE ALL TYPES
+                    if message["type"] == "websocket.disconnect":
+                        print("❌ WS disconnect message")
+                        break
+
+                    if message.get("bytes") is not None:
+                        audio_chunk = message["bytes"]
+
+                    elif message.get("text") is not None:
+                        # ignore text (init already done)
+                        continue
+
+                    else:
+                        continue
+
+                    # ✅ CONFIRM AUDIO ARRIVED
+                    print("📦 Audio chunk received:", len(audio_chunk))
 
                     # 🔥 CONNECT ON FIRST AUDIO
                     if not stt_connected:
+                        print("🔥 FIRST AUDIO RECEIVED → connecting Deepgram")
                         await stt.connect()
                         stt_connected = True
                         print("🎧 Deepgram connected")
