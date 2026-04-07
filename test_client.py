@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import json
 
-WS_URL = "ws://candyai-voiceagent.onrender.com/voice"
+WS_URL = "wss://candyai-voiceagent.onrender.com/voice"
 
 
 async def test():
