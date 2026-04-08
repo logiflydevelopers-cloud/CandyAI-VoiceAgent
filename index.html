@@ -42,8 +42,8 @@ let stream;
 let audioContext;
 let workletNode;
 
-let queue = [];
-let isPlaying = false;
+// 🔊 NEW AUDIO SYSTEM
+let currentAudio = null;
 
 // -----------------------------------
 // CONNECT WS
@@ -62,6 +62,7 @@ function connect() {
   };
 
   ws.onmessage = async (event) => {
+    // JSON messages
     if (typeof event.data === "string") {
       const data = JSON.parse(event.data);
 
@@ -73,8 +74,13 @@ function connect() {
         document.getElementById("ai").innerText = data.text;
       }
 
+      if (data.type === "audio_end") {
+        log("🔊 Audio stream ended");
+      }
+
     } else {
-      enqueueAudio(new Blob([event.data], { type: "audio/mpeg" }));
+      // 🎧 FULL AUDIO RECEIVED
+      playFullAudio(new Blob([event.data], { type: "audio/mpeg" }));
     }
   };
 
@@ -82,34 +88,32 @@ function connect() {
 }
 
 // -----------------------------------
-// AUDIO PLAYBACK
+// AUDIO PLAYBACK (FIXED)
 // -----------------------------------
-function enqueueAudio(chunk) {
-  queue.push(chunk);
-  if (!isPlaying) playQueue();
-}
+function playFullAudio(blob) {
+  const url = URL.createObjectURL(blob);
 
-async function playQueue() {
-  if (!audioContext) {
-    audioContext = new AudioContext();
+  // stop previous audio if playing
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
 
-  isPlaying = true;
+  const audio = new Audio(url);
+  currentAudio = audio;
 
-  while (queue.length > 0) {
-    const chunk = queue.shift();
-    const arrayBuffer = await chunk.arrayBuffer();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  audio.onended = () => {
+    log("🔊 Audio finished");
+  };
 
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.start();
+  audio.onerror = (e) => {
+    log("❌ Audio error");
+    console.error(e);
+  };
 
-    await new Promise(res => source.onended = res);
-  }
-
-  isPlaying = false;
+  audio.play().catch(err => {
+    log("❌ Autoplay blocked: " + err.message);
+  });
 }
 
 // -----------------------------------
@@ -138,6 +142,9 @@ async function start() {
 
     // 🎧 AUDIO CONTEXT
     audioContext = new AudioContext({ sampleRate: 16000 });
+
+    // ⚠️ REQUIRED FOR iPHONE / SAFARI
+    await audioContext.resume();
 
     await audioContext.audioWorklet.addModule("processor.js");
 

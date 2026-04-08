@@ -134,9 +134,16 @@ async def voice_agent(ws: WebSocket):
                             "text": response_text
                         })
 
-                        # 🔊 STREAM TTS
+                        # 🔊 TTS → BUFFER FULL AUDIO (FIX FOR BROWSER/iPHONE)
+                        audio_buffer = bytearray()
+
                         async for chunk in tts.stream_audio(response_text):
-                            await ws.send_bytes(chunk)
+                            audio_buffer.extend(chunk)
+
+                        print(f"🔊 Sending audio ({len(audio_buffer)} bytes)")
+
+                        # send full audio at once
+                        await ws.send_bytes(audio_buffer)
 
                         # 🔚 end signal
                         await ws.send_json({
