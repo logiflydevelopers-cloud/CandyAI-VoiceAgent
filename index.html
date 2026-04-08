@@ -3,6 +3,7 @@
 <head>
   <title>Voice Agent Test</title>
 </head>
+
 <div id="logs" style="
   position: fixed;
   bottom: 0;
@@ -16,6 +17,7 @@
   z-index: 9999;
   padding: 5px;
 "></div>
+
 <body>
   <h2>🎤 Voice Agent Test</h2>
 
@@ -25,193 +27,159 @@
   <p><b>User:</b> <span id="user"></span></p>
   <p><b>AI:</b> <span id="ai"></span></p>
 
-  <script>
+<script>
+function log(msg) {
+  console.log(msg);
+  const el = document.getElementById("logs");
+  if (el) {
+    el.innerHTML += msg + "<br>";
+    el.scrollTop = el.scrollHeight;
+  }
+}
 
-    function log(msg) {
-      console.log(msg);
+let ws;
+let stream;
+let recorder;
+let audioContext;
 
-      const el = document.getElementById("logs");
-      if (el) {
-        el.innerHTML += msg + "<br>";
-        el.scrollTop = el.scrollHeight;
-      }
-    }
-    let ws;
-    let audioContext;
-    let processor;
-    let stream;
+let queue = [];
+let isPlaying = false;
 
-    let queue = [];
-    let isPlaying = false;
+// -----------------------------------
+// CONNECT WS
+// -----------------------------------
+function connect() {
+  ws = new WebSocket("wss://candyai-voiceagent.onrender.com/voice");
+  ws.binaryType = "arraybuffer";
 
-    // -----------------------------------
-    // CONNECT WS
-    // -----------------------------------
-    function connect() {
-      ws = new WebSocket("wss://candyai-voiceagent.onrender.com/voice");
-      ws.binaryType = "arraybuffer";
+  ws.onopen = () => {
+    log("✅ WS Connected");
 
-      ws.onopen = () => {
-        log("✅ Connected");
+    ws.send(JSON.stringify({
+      user_id: "test_user",
+      character_id: "69afc5a36b69a290cae6969e"
+    }));
+  };
 
-        ws.send(JSON.stringify({
-          user_id: "test_user",
-          character_id: "69afc5a36b69a290cae6969e"
-        }));
-      };
+  ws.onmessage = async (event) => {
+    if (typeof event.data === "string") {
+      const data = JSON.parse(event.data);
 
-      ws.onmessage = async (event) => {
-        if (typeof event.data === "string") {
-          const data = JSON.parse(event.data);
-
-          if (data.type === "transcript") {
-            document.getElementById("user").innerText = data.text;
-          }
-
-          if (data.type === "ai_text") {
-            document.getElementById("ai").innerText = data.text;
-          }
-
-        } else {
-          enqueueAudio(new Blob([event.data], { type: "audio/mpeg" }));
-        }
-      };
-    }
-
-    // -----------------------------------
-    // AUDIO PLAYBACK (SMOOTH)
-    // -----------------------------------
-    function enqueueAudio(chunk) {
-      queue.push(chunk);
-      if (!isPlaying) playQueue();
-    }
-
-    async function playQueue() {
-      if (!audioContext) {
-        audioContext = new AudioContext();
+      if (data.type === "transcript") {
+        document.getElementById("user").innerText = data.text;
       }
 
-      isPlaying = true;
-
-      while (queue.length > 0) {
-        const chunk = queue.shift();
-
-        const arrayBuffer = await chunk.arrayBuffer();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        source.start();
-
-        await new Promise(res => source.onended = res);
+      if (data.type === "ai_text") {
+        document.getElementById("ai").innerText = data.text;
       }
 
-      isPlaying = false;
+    } else {
+      enqueueAudio(new Blob([event.data], { type: "audio/mpeg" }));
     }
+  };
 
-    // -----------------------------------
-    // START MIC
-    // -----------------------------------
-    async function start() {
-    try {
-      log("🚀 Start clicked");
+  ws.onclose = (e) => log("❌ WS Closed: " + e.code);
+  ws.onerror = () => log("❌ WS Error");
+}
 
-      // 🎤 GET MIC FIRST
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
+// -----------------------------------
+// AUDIO PLAYBACK
+// -----------------------------------
+function enqueueAudio(chunk) {
+  queue.push(chunk);
+  if (!isPlaying) playQueue();
+}
 
-      log("🎤 Mic permission granted");
-
-      // 🔌 CONNECT WS
-      connect();
-
-      await new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (ws && ws.readyState === 1) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 50);
-      });
-
-      log("🔌 WS ready");
-
-      // 🎧 AUDIO CONTEXT
-      audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000,
-      });
-
-      log("🎧 AudioContext state: " + audioContext.state);
-
-      // 🔥 iOS FIX
-      if (audioContext.state === "suspended") {
-        await audioContext.resume();
-        log("🔊 AudioContext resumed");
-      }
-
-      const source = audioContext.createMediaStreamSource(stream);
-
-      processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-
-      // 🎤 STREAM AUDIO
-      processor.onaudioprocess = (e) => {
-        try {
-          if (!ws || ws.readyState !== 1) {
-            log("⚠️ WS not ready");
-            return;
-          }
-
-          const input = e.inputBuffer.getChannelData(0);
-
-          log("🎤 Sending audio: " + input.length);
-
-          const buffer = new ArrayBuffer(input.length * 2);
-          const view = new DataView(buffer);
-
-          for (let i = 0; i < input.length; i++) {
-            let s = Math.max(-1, Math.min(1, input[i]));
-            view.setInt16(i * 2, s * 0x7fff, true);
-          }
-
-          ws.send(buffer);
-
-        } catch (err) {
-          log("❌ Audio error: " + err.message);
-        }
-      };
-
-      log("🎤 Recording started");
-
-    } catch (err) {
-      log("❌ Start error: " + err.message);
-    }
+async function playQueue() {
+  if (!audioContext) {
+    audioContext = new AudioContext();
   }
 
-    // -----------------------------------
-    // STOP
-    // -----------------------------------
-   function stop() {
-      try {
-        processor?.disconnect();
-        stream?.getTracks().forEach(track => track.stop());
-        audioContext?.close();
-        ws?.close();
+  isPlaying = true;
 
-        log("🛑 Stopped");
-      } catch (err) {
-        log("❌ Stop error: " + err.message);
+  while (queue.length > 0) {
+    const chunk = queue.shift();
+
+    const arrayBuffer = await chunk.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+
+    await new Promise(res => source.onended = res);
+  }
+
+  isPlaying = false;
+}
+
+// -----------------------------------
+// START
+// -----------------------------------
+async function start() {
+  try {
+    log("🚀 Start clicked");
+
+    // 🎤 1. Get mic FIRST
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log("🎤 Mic ready");
+
+    // 🔌 2. Connect WS
+    connect();
+
+    // wait for WS
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (ws && ws.readyState === 1) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 50);
+    });
+
+    log("🔌 WS Ready");
+
+    // 🎧 3. MediaRecorder (KEY FIX)
+    recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm;codecs=opus"
+    });
+
+    recorder.ondataavailable = async (event) => {
+      if (event.data.size > 0 && ws.readyState === 1) {
+        const buffer = await event.data.arrayBuffer();
+        ws.send(buffer);
+
+        log("🎤 Sent chunk: " + buffer.byteLength);
       }
-    }
-  </script>
+    };
+
+    recorder.start(250); // send every 250ms
+
+    log("🎤 Recording started");
+
+  } catch (err) {
+    log("❌ Start error: " + err.message);
+  }
+}
+
+// -----------------------------------
+// STOP
+// -----------------------------------
+function stop() {
+  try {
+    recorder?.stop();
+    stream?.getTracks().forEach(track => track.stop());
+    ws?.close();
+    audioContext?.close();
+
+    log("🛑 Stopped");
+
+  } catch (err) {
+    log("❌ Stop error: " + err.message);
+  }
+}
+</script>
+
 </body>
 </html>

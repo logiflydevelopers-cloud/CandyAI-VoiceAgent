@@ -59,10 +59,10 @@ class DeepgramSTT:
 
             # ❗ DO NOT AWAIT (important)
             self.connection.start({
-                "model": "nova-2",
+                "model": "nova-3",
                 "language": "en",
-                "encoding": "linear16",
-                "sample_rate": 16000,
+                "encoding": "opus",
+                "sample_rate": 48000,
                 "interim_results": True,
                 "endpointing": 300,
             })
