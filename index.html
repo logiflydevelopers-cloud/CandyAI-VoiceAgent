@@ -85,33 +85,39 @@ function connect() {
 // AUDIO PLAYBACK
 // -----------------------------------
 function enqueueAudio(chunk) {
-  queue.push(chunk);
-  if (!isPlaying) playQueue();
+  audioChunks.push(chunk);
+
+  // 🔥 Start playback when enough data arrives
+  if (!isPlaying && audioChunks.length >= 5) {
+    playAudio();
+  }
 }
 
-async function playQueue() {
-  if (!audioContext) {
-    audioContext = new AudioContext();
-  }
+function playAudio() {
+  if (audioChunks.length === 0) return;
 
   isPlaying = true;
 
-  while (queue.length > 0) {
-    const chunk = queue.shift();
-    const arrayBuffer = await chunk.arrayBuffer();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  const blob = new Blob(audioChunks, { type: "audio/mpeg" });
+  audioChunks = [];
 
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.start();
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
 
-    await new Promise(res => source.onended = res);
-  }
+  audio.play().catch(err => {
+    console.error("❌ Audio play error:", err);
+  });
 
-  isPlaying = false;
+  audio.onended = () => {
+    URL.revokeObjectURL(url);
+    isPlaying = false;
+
+    // play next batch if available
+    if (audioChunks.length > 0) {
+      playAudio();
+    }
+  };
 }
-
 // -----------------------------------
 // START
 // -----------------------------------

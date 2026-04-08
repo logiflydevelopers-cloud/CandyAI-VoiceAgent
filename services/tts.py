@@ -22,7 +22,8 @@ class ElevenLabsTTS:
                 headers=self.headers,
                 json={
                     "text": text,
-                    "model_id": "eleven_turbo_v2",  # fast model
+                    "model_id": "eleven_turbo_v2",
+                    "output_format": "mp3_44100_128",  # fast model
                     "voice_settings": {
                         "stability": 0.5,
                         "similarity_boost": 0.8
