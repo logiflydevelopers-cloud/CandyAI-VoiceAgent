@@ -2,37 +2,36 @@ import httpx
 from configs import settings
 
 
-class ElevenLabsTTS:
+class DeepgramTTS:
     def __init__(self):
-        self.api_key = settings.ELEVENLABS_API_KEY
-        self.voice_id = settings.ELEVENLABS_VOICE_ID
+        self.api_key = settings.DEEPGRAM_API_KEY
 
-        self.url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream"
+        self.url = "https://api.deepgram.com/v1/speak?model=aura-asteria-en"
 
         self.headers = {
-            "xi-api-key": self.api_key,
+            "Authorization": f"Token {self.api_key}",
             "Content-Type": "application/json"
         }
 
-    async def stream_audio(self, text: str):
+    async def generate_audio(self, text: str):
+        print("🔊 TTS Request:", text)
+
         async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream(
-                "POST",
+            response = await client.post(
                 self.url,
                 headers=self.headers,
                 json={
-                    "text": text,
-                    "model_id": "eleven_turbo_v2",
-                    "output_format": "mp3_44100_128",  # fast model
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.8
-                    }
+                    "text": text
                 }
-            ) as response:
+            )
 
-                async for chunk in response.aiter_bytes():
-                    if chunk:
-                        yield chunk
+            print("📡 TTS Status:", response.status_code)
 
-        print("TTS Status:", response.status_code)
+            if response.status_code != 200:
+                print("❌ TTS Error:", response.text)
+                return None
+
+            audio_bytes = response.content
+            print(f"🔊 Audio size: {len(audio_bytes)} bytes")
+
+            return audio_bytes

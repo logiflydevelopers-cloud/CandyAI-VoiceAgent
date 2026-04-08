@@ -80,7 +80,7 @@ function connect() {
 
     } else {
       // 🎧 FULL AUDIO RECEIVED
-      playFullAudio(new Blob([event.data], { type: "audio/mpeg" }));
+      playFullAudio(new Blob([event.data], { type: "audio/wav" }));
     }
   };
 

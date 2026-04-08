@@ -2,14 +2,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
 
 from services.stt import DeepgramSTT
-from services.tts import ElevenLabsTTS
+from services.tts import DeepgramTTS
 from services.llm import LLMService
 
 router = APIRouter()
 
 # Shared services
 llm = LLMService()
-tts = ElevenLabsTTS()
+tts = DeepgramTTS()
 
 @router.websocket("/voice")
 async def voice_agent(ws: WebSocket):
@@ -134,16 +134,14 @@ async def voice_agent(ws: WebSocket):
                             "text": response_text
                         })
 
-                        # 🔊 TTS → BUFFER FULL AUDIO (FIX FOR BROWSER/iPHONE)
-                        audio_buffer = bytearray()
+                        # 🔊 Deepgram TTS (FULL AUDIO - NO STREAM)
+                        audio_bytes = await tts.generate_audio(response_text)
 
-                        async for chunk in tts.stream_audio(response_text):
-                            audio_buffer.extend(chunk)
-
-                        print(f"🔊 Sending audio ({len(audio_buffer)} bytes)")
-
-                        # send full audio at once
-                        await ws.send_bytes(audio_buffer)
+                        if audio_bytes and len(audio_bytes) > 0:
+                            print(f"🔊 Sending audio ({len(audio_bytes)} bytes)")
+                            await ws.send_bytes(audio_bytes)
+                        else:
+                            print("❌ No audio generated from TTS")
 
                         # 🔚 end signal
                         await ws.send_json({
