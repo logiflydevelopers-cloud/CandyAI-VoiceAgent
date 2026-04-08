@@ -3,9 +3,7 @@ from configs import settings
 
 from services.memory import SimpleMemory
 from services.prompt_builder import build_character_prompt
-from services.mood import detect_mood
 from services.character_service import get_character_by_id
-
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -19,23 +17,32 @@ class LLMService:
     # -----------------------------------
     async def generate_response(self, user_id: str, character_id: str, user_text: str) -> str:
         try:
-            # 1. Detect Mood
-            mood = await self._detect_mood(user_text)
+            # -----------------------------------
+            # 1. FAST MOOD DETECTION (NO LLM)
+            # -----------------------------------
+            mood = self._detect_mood_fast(user_text)
             self.memory.set_mood(user_id, mood)
 
-            # 2. Store User Message
+            # -----------------------------------
+            # 2. STORE USER MESSAGE
+            # -----------------------------------
             self.memory.add_message(user_id, "user", user_text)
 
-            # 3. Get Memory Context
+            # -----------------------------------
+            # 3. CONTEXT
+            # -----------------------------------
             context = self.memory.get_context(user_id)
 
-            # 4. Load Character from DB
+            # -----------------------------------
+            # 4. CHARACTER
+            # -----------------------------------
             character = get_character_by_id(character_id)
 
-            # 5. Build Dynamic Prompt
+            # -----------------------------------
+            # 5. PROMPT
+            # -----------------------------------
             system_prompt = build_character_prompt(character)
 
-            # 6. Inject Dynamic Context (VERY IMPORTANT)
             system_prompt += f"""
 
 Current User Context:
@@ -46,7 +53,9 @@ Recent Conversation:
 {context['history']}
 """
 
-            # 7. Call LLM
+            # -----------------------------------
+            # 6. LLM CALL (ONLY ONE CALL NOW ⚡)
+            # -----------------------------------
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -58,7 +67,9 @@ Recent Conversation:
 
             reply = response.choices[0].message.content.strip()
 
-            # 8. Store AI Response
+            # -----------------------------------
+            # 7. STORE AI RESPONSE
+            # -----------------------------------
             self.memory.add_message(user_id, "assistant", reply)
 
             return reply
@@ -68,28 +79,35 @@ Recent Conversation:
             return "Hmm... something feels off. Can you say that again?"
 
     # -----------------------------------
-    # INTERNAL MOOD DETECTION
+    # FAST MOOD DETECTION (TEXT + TONE)
     # -----------------------------------
-    async def _detect_mood(self, text: str) -> str:
-        try:
-            # lightweight LLM call for mood
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Classify mood into: happy, sad, flirty, angry, neutral. Only return one word."
-                    },
-                    {"role": "user", "content": text}
-                ],
-                temperature=0
-            )
+    def _detect_mood_fast(self, text: str) -> str:
+        text_lower = text.lower()
 
-            mood = response.choices[0].message.content.strip().lower()
+        # 🔥 FLIRTY
+        if any(w in text_lower for w in ["love", "baby", "miss you", "kiss"]):
+            return "flirty"
 
-            allowed = ["happy", "sad", "flirty", "angry", "neutral"]
-            return mood if mood in allowed else "neutral"
+        # 😡 ANGRY (short + aggressive)
+        if any(w in text_lower for w in ["hate", "angry", "idiot", "stupid"]):
+            return "angry"
 
-        except Exception as e:
-            print("Mood Detection Error:", e)
-            return "neutral"
+        # 😢 SAD
+        if any(w in text_lower for w in ["sad", "lonely", "tired", "bad"]):
+            return "sad"
+
+        # 😊 HAPPY
+        if any(w in text_lower for w in ["great", "awesome", "happy", "good"]):
+            return "happy"
+
+        # 🔥 TONE SIGNALS
+        if text.endswith("!"):
+            return "happy"
+
+        if len(text.split()) <= 2:
+            return "angry"
+
+        if "..." in text:
+            return "sad"
+
+        return "neutral"
