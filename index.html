@@ -123,8 +123,22 @@ async function start() {
   try {
     log("🚀 Start clicked");
 
+    // 🔓 iOS AUDIO UNLOCK (FIX)
+    const unlockAudio = new Audio();
+    unlockAudio.muted = true;
+
+    try {
+      await unlockAudio.play();
+    } catch (e) {
+      log("⚠️ Unlock play blocked (normal)");
+    }
+
+    unlockAudio.pause();
+    log("🔓 Audio unlocked");
+
     // 🎤 MIC
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log("🎤 Mic permission granted");
 
     // 🔌 WS
     connect();
@@ -142,14 +156,11 @@ async function start() {
 
     // 🎧 AUDIO CONTEXT
     audioContext = new AudioContext({ sampleRate: 16000 });
-
-    // ⚠️ REQUIRED FOR iPHONE / SAFARI
     await audioContext.resume();
 
     await audioContext.audioWorklet.addModule("processor.js");
 
     const source = audioContext.createMediaStreamSource(stream);
-
     workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
 
     source.connect(workletNode);
