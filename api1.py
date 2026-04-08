@@ -57,22 +57,7 @@ async def voice_agent(ws: WebSocket):
 
             try:
                 while True:
-                    message = await ws.receive()
-
-                    # 🔥 HANDLE ALL TYPES
-                    if message["type"] == "websocket.disconnect":
-                        print("❌ WS disconnect message")
-                        break
-
-                    if message.get("bytes") is not None:
-                        audio_chunk = message["bytes"]
-
-                    elif message.get("text") is not None:
-                        # ignore text (init already done)
-                        continue
-
-                    else:
-                        continue
+                    audio_chunk = await ws.receive_bytes()
 
                     # ✅ CONFIRM AUDIO ARRIVED
                     print("📦 Audio chunk received:", len(audio_chunk))
