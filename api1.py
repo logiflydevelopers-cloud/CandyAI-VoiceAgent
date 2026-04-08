@@ -103,7 +103,8 @@ async def voice_agent(ws: WebSocket):
                         continue
 
                     text = data.get("text", "")
-                    is_final = data.get("is_final", False) or data.get("speech_final", False)
+                    is_final = data.get("is_final", False) or data.get("speec " \
+                    "h_final", False)
 
                     print("🧪 STT DATA:", data)
 
