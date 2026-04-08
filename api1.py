@@ -13,6 +13,7 @@ tts = ElevenLabsTTS()
 
 @router.websocket("/voice")
 async def voice_agent(ws: WebSocket):
+    print("🔥 SOCKET REQUEST ARRIVED")
     await ws.accept()
 
     # -----------------------------------
