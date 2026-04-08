@@ -119,7 +119,9 @@ async def voice_agent(ws: WebSocket):
                     if is_final and text.strip():
                         print(f"🗣 User: {text}")
 
+                        # -----------------------------------
                         # 🧠 LLM
+                        # -----------------------------------
                         response_text = await llm.generate_response(
                             user_id=user_id,
                             character_id=character_id,
@@ -134,20 +136,47 @@ async def voice_agent(ws: WebSocket):
                             "text": response_text
                         })
 
-                        # 🔊 STREAM TTS
-                        async for chunk in tts.stream_audio(response_text):
-                            await ws.send_bytes(chunk)
+                        # -----------------------------------
+                        # 🛑 STOP MIC (VERY IMPORTANT)
+                        # -----------------------------------
+                        await ws.send_json({
+                            "type": "stop_mic"
+                        })
 
-                        # 🔚 end signal
+                        await asyncio.sleep(0.1)  # let frontend stop mic
+
+                        # -----------------------------------
+                        # 🔊 STREAM TTS
+                        # -----------------------------------
+                        print("🔥 STARTING TTS")
+
+                        async for chunk in tts.stream_audio(response_text):
+                            if chunk:
+                                print("🔊 Sending TTS chunk:", len(chunk))
+                                await ws.send_bytes(chunk)
+
+                                # 🔥 prevent websocket flooding
+                                await asyncio.sleep(0.02)
+
+                        # -----------------------------------
+                        # 🔚 END AUDIO
+                        # -----------------------------------
                         await ws.send_json({
                             "type": "audio_end"
                         })
 
+                        # -----------------------------------
+                        # 🎤 RESUME MIC
+                        # -----------------------------------
+                        await ws.send_json({
+                            "type": "start_mic"
+                        })
+
             except asyncio.CancelledError:
                 print("⚠️ Transcript task cancelled")
+
             except Exception as e:
                 print("❌ Process Error:", e)
-
         # -----------------------------------
         # RUN TASKS
         # -----------------------------------

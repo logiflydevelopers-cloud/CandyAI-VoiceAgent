@@ -42,9 +42,6 @@ let stream;
 let audioContext;
 let workletNode;
 
-let queue = [];
-let isPlaying = false;
-
 // -----------------------------------
 // CONNECT WS
 // -----------------------------------
@@ -62,19 +59,57 @@ function connect() {
   };
 
   ws.onmessage = async (event) => {
-    if (typeof event.data === "string") {
-      const data = JSON.parse(event.data);
+    try {
+      // -----------------------------------
+      // 📩 TEXT MESSAGE
+      // -----------------------------------
+      if (typeof event.data === "string") {
+        const data = JSON.parse(event.data);
 
-      if (data.type === "transcript") {
-        document.getElementById("user").innerText = data.text;
+        // 📝 Transcript
+        if (data.type === "transcript") {
+          document.getElementById("user").innerText = data.text;
+        }
+
+        // 🤖 AI Response
+        else if (data.type === "ai_text") {
+          document.getElementById("ai").innerText = data.text;
+        }
+
+        // 🛑 Stop mic during TTS
+        else if (data.type === "stop_mic") {
+          workletNode?.disconnect();
+          log("🛑 Mic stopped for TTS");
+        }
+
+        // 🎤 Resume mic after TTS
+        else if (data.type === "start_mic") {
+          try {
+            source.connect(workletNode);
+            log("🎤 Mic resumed");
+          } catch (e) {
+            log("⚠️ Mic reconnect issue");
+          }
+        }
+
+        // 🔚 Audio end (optional)
+        else if (data.type === "audio_end") {
+          log("🔚 Audio finished");
+        }
       }
 
-      if (data.type === "ai_text") {
-        document.getElementById("ai").innerText = data.text;
+      // -----------------------------------
+      // 🔊 AUDIO MESSAGE (BINARY)
+      // -----------------------------------
+      else {
+        console.log("🔊 RECEIVED AUDIO:", event.data.byteLength);
+
+        const blob = new Blob([event.data], { type: "audio/mpeg" });
+        enqueueAudio(blob);
       }
 
-    } else {
-      enqueueAudio(new Blob([event.data], { type: "audio/mpeg" }));
+    } catch (err) {
+      console.error("❌ WS message error:", err);
     }
   };
 
@@ -84,11 +119,13 @@ function connect() {
 // -----------------------------------
 // AUDIO PLAYBACK
 // -----------------------------------
+let audioChunks = [];
+let isPlaying = false;
+
 function enqueueAudio(chunk) {
   audioChunks.push(chunk);
 
-  // 🔥 Start playback when enough data arrives
-  if (!isPlaying && audioChunks.length >= 5) {
+  if (!isPlaying && audioChunks.length >= 3) {
     playAudio();
   }
 }
@@ -112,7 +149,6 @@ function playAudio() {
     URL.revokeObjectURL(url);
     isPlaying = false;
 
-    // play next batch if available
     if (audioChunks.length > 0) {
       playAudio();
     }
