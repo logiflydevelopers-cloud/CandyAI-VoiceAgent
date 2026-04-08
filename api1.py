@@ -17,24 +17,34 @@ async def voice_agent(ws: WebSocket):
     await ws.accept()
 
     # -----------------------------------
-    # INIT DATA
+    # INIT DATA (NON-BLOCKING SAFE)
     # -----------------------------------
+    import json
+
+    user_id = "default_user"
+    character_id = "default_character"
+
     try:
-        init_data = await ws.receive_json()
+        message = await ws.receive()
 
-        user_id = init_data.get("user_id", "default_user")
-        character_id = init_data.get("character_id")
+        # ✅ If first message is JSON
+        if message.get("text"):
+            init_data = json.loads(message["text"])
 
-        if not character_id:
-            await ws.close()
-            return
+            user_id = init_data.get("user_id", user_id)
+            character_id = init_data.get("character_id", character_id)
+
+            print(f"✅ Init received: user={user_id}, character={character_id}")
+
+        else:
+            print("⚠️ No init JSON, continuing with defaults")
+
+    except WebSocketDisconnect:
+        print("❌ Client disconnected during init")
+        return  # ✅ DO NOT CLOSE AGAIN
 
     except Exception as e:
-        print("❌ Init Error:", e)
-        await ws.close()
-        return
-
-    print(f"✅ Connected: user={user_id}, character={character_id}")
+        print("⚠️ Init skipped:", e)
 
     # -----------------------------------
     # INIT STT (LAZY)
