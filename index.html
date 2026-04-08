@@ -44,7 +44,6 @@ let workletNode;
 
 // 🔊 NEW AUDIO SYSTEM
 let currentAudio = null;
-let audioElement = null;
 
 // -----------------------------------
 // CONNECT WS
@@ -92,25 +91,28 @@ function connect() {
 // AUDIO PLAYBACK (FIXED)
 // -----------------------------------
 function playFullAudio(blob) {
-  if (!window.audioElement) {
-    log("❌ Audio not initialized");
-    return;
+  const url = URL.createObjectURL(blob);
+
+  // stop previous audio if playing
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
 
-  const url = URL.createObjectURL(blob);
-  audioElement.src = url;
+  const audio = new Audio(url);
+  currentAudio = audio;
 
-  audioElement.onended = () => {
+  audio.onended = () => {
     log("🔊 Audio finished");
   };
 
-  audioElement.onerror = (e) => {
+  audio.onerror = (e) => {
     log("❌ Audio error");
     console.error(e);
   };
 
-  audioElement.play().catch(err => {
-    log("❌ Play failed: " + err.message);
+  audio.play().catch(err => {
+    log("❌ Autoplay blocked: " + err.message);
   });
 }
 
@@ -121,24 +123,8 @@ async function start() {
   try {
     log("🚀 Start clicked");
 
-    // 🔓 iOS AUDIO UNLOCK (VERY IMPORTANT)
-    window.audioElement = new Audio();
-    audioElement.muted = true;
-
-    try {
-      await audioElement.play();
-    } catch (e) {
-      log("⚠️ Initial play blocked (expected)");
-    }
-
-    audioElement.pause();
-    audioElement.muted = false;
-
-    log("🔓 Audio unlocked");
-
     // 🎤 MIC
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    log("🎤 Mic permission granted");
 
     // 🔌 WS
     connect();
@@ -157,13 +143,10 @@ async function start() {
     // 🎧 AUDIO CONTEXT
     audioContext = new AudioContext({ sampleRate: 16000 });
 
-    // ⚠️ REQUIRED FOR SAFARI
+    // ⚠️ REQUIRED FOR iPHONE / SAFARI
     await audioContext.resume();
 
-    log("🎧 AudioContext ready");
-
     await audioContext.audioWorklet.addModule("processor.js");
-    log("📦 Worklet loaded");
 
     const source = audioContext.createMediaStreamSource(stream);
 
@@ -183,7 +166,6 @@ async function start() {
 
   } catch (err) {
     log("❌ Error: " + err.message);
-    console.error(err);
   }
 }
 
