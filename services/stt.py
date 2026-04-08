@@ -73,8 +73,8 @@ class DeepgramSTT:
             self.connection.start({
                 "model": "nova-3",
                 "language": "en-US",
-                "encoding": "opus",
-                "sample_rate": 48000,
+                "encoding": "linear16",
+                "sample_rate": 16000,
                 "interim_results": True,
                 "endpointing": 300,
                 "vad_events": True,
