@@ -39,8 +39,8 @@ function log(msg) {
 
 let ws;
 let stream;
-let recorder;
 let audioContext;
+let workletNode;
 
 let queue = [];
 let isPlaying = false;
@@ -79,7 +79,6 @@ function connect() {
   };
 
   ws.onclose = (e) => log("❌ WS Closed: " + e.code);
-  ws.onerror = () => log("❌ WS Error");
 }
 
 // -----------------------------------
@@ -99,7 +98,6 @@ async function playQueue() {
 
   while (queue.length > 0) {
     const chunk = queue.shift();
-
     const arrayBuffer = await chunk.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
@@ -121,14 +119,12 @@ async function start() {
   try {
     log("🚀 Start clicked");
 
-    // 🎤 1. Get mic FIRST
+    // 🎤 MIC
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    log("🎤 Mic ready");
 
-    // 🔌 2. Connect WS
+    // 🔌 WS
     connect();
 
-    // wait for WS
     await new Promise((resolve) => {
       const check = setInterval(() => {
         if (ws && ws.readyState === 1) {
@@ -140,26 +136,29 @@ async function start() {
 
     log("🔌 WS Ready");
 
-    // 🎧 3. MediaRecorder (KEY FIX)
-    recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm;codecs=opus"
-    });
+    // 🎧 AUDIO CONTEXT
+    audioContext = new AudioContext({ sampleRate: 16000 });
 
-    recorder.ondataavailable = async (event) => {
-      if (event.data.size > 0 && ws.readyState === 1) {
-        const buffer = await event.data.arrayBuffer();
-        ws.send(buffer);
+    await audioContext.audioWorklet.addModule("processor.js");
 
-        log("🎤 Sent chunk: " + buffer.byteLength);
+    const source = audioContext.createMediaStreamSource(stream);
+
+    workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
+
+    source.connect(workletNode);
+    workletNode.connect(audioContext.destination);
+
+    workletNode.port.onmessage = (event) => {
+      if (ws.readyState === 1) {
+        ws.send(event.data);
+        log("🎤 Sent PCM: " + event.data.byteLength);
       }
     };
 
-    recorder.start(250); // send every 250ms
-
-    log("🎤 Recording started");
+    log("🎤 PCM Streaming started");
 
   } catch (err) {
-    log("❌ Start error: " + err.message);
+    log("❌ Error: " + err.message);
   }
 }
 
@@ -168,10 +167,10 @@ async function start() {
 // -----------------------------------
 function stop() {
   try {
-    recorder?.stop();
+    workletNode?.disconnect();
     stream?.getTracks().forEach(track => track.stop());
-    ws?.close();
     audioContext?.close();
+    ws?.close();
 
     log("🛑 Stopped");
 
@@ -180,6 +179,5 @@ function stop() {
   }
 }
 </script>
-
 </body>
 </html>
