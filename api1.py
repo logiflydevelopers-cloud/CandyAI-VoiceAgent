@@ -180,3 +180,6 @@ async def voice_agent(ws: WebSocket):
             await stt.close()
 
         print("🛑 Connection cleaned up")
+
+
+        
